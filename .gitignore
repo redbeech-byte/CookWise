@@ -1,0 +1,10 @@
+# Streamlit secrets and config
+.streamlit/
+
+# Local data and databases
+data/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
