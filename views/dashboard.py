@@ -1,5 +1,5 @@
 import streamlit as st
-from project.github.CookWise.helpers.image_helper import get_unique_recipe_image_data, trigger_unsplash_download
+from helpers.image_helper import get_unique_recipe_image_data, trigger_unsplash_download
 
 def show_dashboard():
     st.title("Recipe Dashboard")

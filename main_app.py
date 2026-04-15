@@ -1,8 +1,8 @@
-from project.github.CookWise.views import guide, home, recipe_details, search
+from views import guide, home, recipe_details, search
 import streamlit as st
 # Consolidated imports
-from project.github.CookWise.views import upload
-from project.github.CookWise.helpers.switch_page import switch_page
+from views import upload
+from helpers.switch_page import switch_page
 import time
 
 st.set_page_config(page_title="Recipe App", layout="wide")
@@ -14,6 +14,8 @@ def initialize_state():
         st.session_state.current_page = "Home"
     if 'selected_recipe' not in st.session_state:
         st.session_state.selected_recipe = None
+    if 'page_history' not in st.session_state:
+        st.session_state.page_history = ["Home"]
 
 def login_screen():
     # Squeezes the login box into the middle of the screen

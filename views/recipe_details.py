@@ -1,7 +1,7 @@
 import streamlit as st
 import ast
-from project.github.CookWise.helpers.db import get_recipe_by_id, get_ingredients_for_recipe
-from project.github.CookWise.helpers.image_helper import display_recipe_image
+from helpers.db import get_recipe_by_id, get_ingredients_for_recipe
+from helpers.image_helper import display_recipe_image
 
 def show():
     recipe_id = st.session_state.get('selected_recipe', None)

@@ -1,9 +1,11 @@
-from project.github.CookWise.views import guide, recipe_details, search
+from views import guide, recipe_details, search
 import streamlit as st
-from project.github.CookWise.views import upload
-from project.github.CookWise.helpers.switch_page import switch_page
-from project.github.CookWise.helpers.db import search_recipes
-from project.github.CookWise.helpers.image_helper import display_recipe_image
+from views import upload
+from helpers.switch_page import switch_page
+from helpers.db import search_recipes
+from helpers.image_helper import display_recipe_image
+
+import os
 
 # We removed set_page_config since it throws an error if called twice across pages.
 def show():
@@ -26,7 +28,8 @@ def show():
         st.subheader("")
         with st.container(border=True):
             #on the top left there should be a graph which is for now a picture placeholder
-            st.image("project/personal/recipe_app/pictures/graph_placeholder.png", caption="Your Cooking Activity")
+            picture_path = os.path.join(os.path.dirname(__file__), "..", "pictures", "graph_placeholder.png")
+            st.image(picture_path, caption="Your Cooking Activity")
 
     # Database recipes
     recipes = search_recipes("", limit=6)

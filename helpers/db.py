@@ -44,3 +44,26 @@ def get_ingredients_for_recipe(recipe_id):
         """
         df = pd.read_sql(sql, conn, params=(recipe_id,))
         return df.to_dict(orient="records")
+
+def search_recipes_by_ingredients(ingredients_list, limit=10):
+    if not ingredients_list:
+        return []
+    with get_connection() as conn:
+        placeholders = " OR ".join(["i.pure_ingredient_harsh LIKE ? OR i.original_string LIKE ?"] * len(ingredients_list))
+        params = []
+        for ing in ingredients_list:
+            params.extend([f"%{ing.lower()}%", f"%{ing.lower()}%"])
+            
+        sql = f"""
+            SELECT r.recipe_id, r.recipe_title, r.est_prep_time_min, r.est_cook_time_min, r.main_ingredient, COUNT(DISTINCT i.ingredient_id) as match_count
+            FROM recipes r
+            JOIN recipe_ingredients ri ON r.recipe_id = ri.recipe_id
+            JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
+            WHERE {placeholders}
+            GROUP BY r.recipe_id
+            ORDER BY match_count DESC
+            LIMIT ?
+        """
+        params.append(limit)
+        df = pd.read_sql(sql, conn, params=params)
+        return df.to_dict(orient="records")

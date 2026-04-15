@@ -1,7 +1,7 @@
 import streamlit as st
-from project.github.CookWise.helpers.switch_page import switch_page
-from project.github.CookWise.helpers.db import search_recipes
-from project.github.CookWise.helpers.image_helper import display_recipe_image
+from helpers.switch_page import switch_page
+from helpers.db import search_recipes
+from helpers.image_helper import display_recipe_image
 
 def show():
     st.title("Search Recipes")
