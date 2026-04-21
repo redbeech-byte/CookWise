@@ -20,6 +20,13 @@ def show():
         st.error("Recipe not found.")
         return
 
+    if "current_recipie_guide" not in st.session_state:
+        st.session_state["current_recipie_guide"] = recipe_id
+        st.session_state[f"current_step_{recipe_id}"] = 0  # Reset to step 0 when a new recipe is selected
+
+    if st.session_state["current_recipie_guide"] != recipe_id:
+        st.session_state["current_recipie_guide"] = recipe_id
+        st.session_state[f"current_step_{recipe_id}"] = 0  # Reset to step 0 when a new recipe is selected
     # Parse directions
     directions_str = recipe.get("directions", "[]")
     directions = []

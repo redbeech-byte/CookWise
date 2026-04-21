@@ -2,8 +2,9 @@ from views import guide, recipe_details, search, scan
 import streamlit as st
 
 from helpers.switch_page import switch_page
-from helpers.db import search_recipes
+from helpers.db import search_recipes, get_recipe_by_id
 from helpers.image_helper import display_recipe_image
+from helpers. supabase_client import get_cooked_recipes
 
 import os
 import textwrap
@@ -12,22 +13,50 @@ def show_title():
 # We removed set_page_config since it throws an error if called twice across pages.
 def show():
 
-    st.write("Welcome to your recipe dashboard. Here you will see your saved recipes and recommendations.")
 
 
-    navigation,spacer, graph = st.columns([2,1,5])
+    graph,spacer1, navigation, spacer2 = st.columns([4,0.5,2,0.5])
 
     with navigation: #using buttons to navigate to the other pages
-        with st.container():
-            st.subheader("Menu")
-            if st.button("Search Recipes"):
-                switch_page("Search")
-            if st.button("Upload Ingredients"):
-                switch_page("Upload")
+        with st.container():    # currently cooking or last cooked recipe
+            if "current_recipie_guide" not in st.session_state and get_cooked_recipes() == []:
+                st.subheader("Welcome to CookWise! 👋")
+                st.write("Your personalized cooking assistant. Get started by searching for recipes or uploading your fridge ingredients.")
+            elif "current_recipie_guide" not in st.session_state and get_cooked_recipes() != []:
+                st.subheader("Welcome back! 👋")
+                st.write("Here's the last recipe you cooked:")
+                last_cooked_id = get_cooked_recipes()[0]["recipe_id"]
+                last_cooked = get_recipe_by_id(last_cooked_id)
+                title = last_cooked.get('recipe_title', 'Unknown Title')
+  # Get the most recently cooked recipe
+                display_recipe_image(last_cooked.get('recipe_title', 'recipe'), key_suffix="last_cooked")
+                st.write(f"**{title}**")
+                #st.write(f"✅ Cooked on: {last_cooked['cooked_at'][:10]}")
+                
+                if st.button("👨‍🍳 Continue Cooking", key="continue_cooking", use_container_width=True):
+                    st.session_state.selected_recipe = last_cooked['recipe_id']
+                    switch_page("Guide")
+                if st.button("View Recipe Details", key="view_details", use_container_width=True):
+                    st.session_state.selected_recipe = last_cooked['recipe_id']
+                    switch_page("Recipe Details")
+            else:
+                st.subheader("Continue where you left off:")
+                last_cooked_id = st.session_state.get("current_recipie_guide")
+                last_cooked = get_recipe_by_id(last_cooked_id)
+                title = last_cooked.get('recipe_title', 'Unknown Title')
+
+                display_recipe_image(last_cooked.get('recipe_title', 'recipe'), key_suffix="current_guide")
+                st.write(f"**{title}**")
+                if st.button("👨‍🍳 Continue Cooking", key="continue_cooking", use_container_width=True):
+                    switch_page("Guide")
+                if st.button("View Recipe Details", key="view_details", use_container_width=True):
+                    st.session_state.selected_recipe = last_cooked['recipe_id']
+                    switch_page("Recipe Details")
+
 
 
     with graph:
-        st.subheader("")
+        st.subheader("Your NutriRadar")
         with st.container(border=True):
             from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar
             with st.spinner("Loading nutrition info..."):
@@ -36,10 +65,15 @@ def show():
                 st.plotly_chart(fig, use_container_width=True)
 
     # Database recipes
-    recipes = search_recipes("", limit=6)
+    from helpers.recommendation_helper import get_recommended_recipes
+    recipes = get_recommended_recipes(limit=12)
     if not recipes:
         st.warning("No recipes in the database.")
-        return
+        # Fallback to search_recipes if anything goes wrong with KNN
+        from helpers.db import search_recipes
+        recipes = search_recipes("", limit=12)
+        if not recipes:
+            return
 
     # 2. Setup Carousel State
     # This remembers which recipes we are currently looking at
@@ -83,8 +117,12 @@ def show():
                     
                     st.subheader(title)
                     
+                    from helpers.nutrition_helper import get_recipe_nutrition
+                    # Pre-load the nutrition data in the background (caches in DB)
+                    get_recipe_nutrition(recipe['recipe_id'])
+                    
                     # Assume a maximum height of 4 lines. Add empty lines for padding.
-                    max_title_lines = 7
+                    max_title_lines = 4
                     pad_lines = max(0, max_title_lines - estimated_lines)
                     for _ in range(pad_lines):
                         st.write(f"\n")

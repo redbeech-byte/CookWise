@@ -41,6 +41,8 @@ def show():
     
     st.subheader(f"Results ({len(results)})")
     
+    from helpers.nutrition_helper import get_recipe_nutrition
+
     if results:
         cols_per_row = 3
         for i in range(0, len(results), cols_per_row):
@@ -51,6 +53,10 @@ def show():
                     with cols[j]:
                         display_recipe_image(recipe.get('recipe_title', 'recipe'), key_suffix=str(recipe['recipe_id']))
                         st.write(f"**{recipe.get('recipe_title')}**")
+
+                        # Pre-load the nutrition data in the background (caches in DB)
+                        get_recipe_nutrition(recipe['recipe_id'])
+
                         st.write(f"⏱️ {recipe.get('est_prep_time_min', 0)} mins")
                         if st.button("View Recipe", key=f"search_btn_{recipe['recipe_id']}"):
                             st.session_state.selected_recipe = recipe['recipe_id']
