@@ -6,12 +6,6 @@ from collections import deque
 
 APP_NAME_TRACKING = "?utm_source=MyRecipeApp&utm_medium=referral"
 
-if "recent_image_history" not in st.session_state:
-    st.session_state.recent_image_history = deque(maxlen=50)
-
-if "recipe_image_mapping" not in st.session_state:
-    st.session_state.recipe_image_mapping = {}
-
 @st.cache_data(ttl=86400)
 def _fetch_unsplash_results(query: str):
     search_query = f"{query} food"
@@ -40,6 +34,12 @@ def _fetch_unsplash_results(query: str):
     return results
 
 def get_unique_recipe_image_data(query: str):
+    if "recent_image_history" not in st.session_state:
+        st.session_state.recent_image_history = deque(maxlen=50)
+
+    if "recipe_image_mapping" not in st.session_state:
+        st.session_state.recipe_image_mapping = {}
+
     if query in st.session_state.recipe_image_mapping:
         return st.session_state.recipe_image_mapping[query]
 

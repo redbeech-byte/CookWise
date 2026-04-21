@@ -1,15 +1,17 @@
-from views import guide, recipe_details, search
+from views import guide, recipe_details, search, scan
 import streamlit as st
-from views import upload
+
 from helpers.switch_page import switch_page
 from helpers.db import search_recipes
 from helpers.image_helper import display_recipe_image
 
 import os
-
+import textwrap
+def show_title():
+    return "Home"
 # We removed set_page_config since it throws an error if called twice across pages.
 def show():
-    st.title("Home")
+
     st.write("Welcome to your recipe dashboard. Here you will see your saved recipes and recommendations.")
 
 
@@ -44,10 +46,10 @@ def show():
 
     st.divider()
     st.subheader("Recommended Recipes")
-    TILES_PER_ROW = 3
+    TILES_PER_ROW = 4
 
     # 3. Create the Layout: Left Arrow, Content, Right Arrow
-    col_prev, col_content, col_next = st.columns([1, 8, 1], vertical_alignment="center")
+    col_prev, col_content, col_next = st.columns([1, 15, 1], vertical_alignment="center")
 
     # --- LEFT ARROW ---
     with col_prev:
@@ -70,9 +72,27 @@ def show():
             with col:
                 with st.container(border=True):
                     display_recipe_image(recipe.get('recipe_title', 'recipe'), key_suffix=f"home_{recipe['recipe_id']}")
-                    st.subheader(recipe.get("recipe_title", "Unknown Title"))
-                    st.caption(f"⏱️ {recipe.get('est_prep_time_min', 0)} mins")
-                    if st.button("Cook", key=f"btn_{recipe.get('recipe_id')}", width='stretch'):
+                    
+                    title = recipe.get("recipe_title", "Unknown Title")
+                    
+                    # Estimate the number of lines the title will span based on word wrap logic
+                    max_chars_per_line = 12 # approximate chars before Streamlit wraps a subheader
+                    estimated_lines = len(textwrap.wrap(title, width=max_chars_per_line)) or 1
+                    
+                    st.subheader(title)
+                    
+                    # Assume a maximum height of 4 lines. Add empty lines for padding.
+                    max_title_lines = 7
+                    pad_lines = max(0, max_title_lines - estimated_lines)
+                    for _ in range(pad_lines):
+                        st.write(f"\n")
+                        
+                    st.write(f"⏱️ **{recipe.get('est_prep_time_min', 0)} mins**")
+                    
+                    # Push the button cleanly to the bottom
+                    st.write("")
+                    
+                    if st.button("👨‍🍳 Cook", key=f"btn_{recipe.get('recipe_id')}", use_container_width=True):
                         st.session_state.selected_recipe = recipe.get("recipe_id")
                         switch_page("Recipe Details")
 
