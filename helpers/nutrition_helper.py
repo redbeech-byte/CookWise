@@ -61,7 +61,7 @@ def get_recipe_nutrition(recipe_id):
     """
     
     # We use a cheap models
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel("gemini-2.5-flash-lite")
     try:
         response = model.generate_content(prompt)
         text = response.text.replace("```json", "").replace("```", "").strip()

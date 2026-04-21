@@ -69,6 +69,8 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
     # Now we render the UI using the cached ingredients
     ingredients_list = st.session_state.get("scanned_ingredients")
     
+    from helpers.nutrition_helper import get_recipe_nutrition
+
     if ingredients_list:
         st.success(f"**Identified Ingredients:** {', '.join(ingredients_list)}")
         
@@ -90,6 +92,10 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
                                 if len(title) > 55:
                                     title = title[:52] + "..."
                                 st.write(f"**{title}**")
+
+                                # Pre-load the nutrition data in the background (caches in DB)
+                                get_recipe_nutrition(recipe['recipe_id'])
+
                                 st.write(f"⏱️ {recipe.get('est_prep_time_min', 0)} mins (Matches: {recipe.get('match_count', 0)})")
                                 st.write("")
                                 if st.button("👨‍🍳 Cook", key=f"upload_btn_{recipe['recipe_id']}", use_container_width=True):
