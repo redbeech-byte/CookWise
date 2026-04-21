@@ -16,7 +16,8 @@ def show():
             
         with filter_popover:
             with st.popover("Filter", icon="🎯"):
-                max_time = st.slider("Max Time (mins)", min_value=10, max_value=240, value=240, step=2)
+                #range slider with upper and lower bounds for max time, difficulty (dropdown with any, easy, medium, hard), and dietary preferences (checkboxes for vegan, vegetarian, gluten-free, dairy-free, nut-free)
+                min_time, max_time = st.slider("Time Range (mins)", min_value=10, max_value=240, value=(10,240), step=2)
                 difficulty = st.selectbox("Difficulty", ["Any", "Easy", "Medium", "Hard"])
                 
                 st.write("Dietary Preferences")
@@ -35,6 +36,7 @@ def show():
             query=query, 
             limit=50, 
             max_time=max_time if max_time < 240 else None,
+            min_time=min_time if min_time > 10 else None,
             difficulty=difficulty,
             dietary_prefs=dietary_prefs
         )

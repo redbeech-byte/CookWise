@@ -199,14 +199,8 @@ def show():
                                         
                                     st.write(f"**{title}**")
 
-                                    recipe_nut = get_recipe_nutrition(rid)
-                                    if recipe_nut and nut_info:
-                                        small_fig = draw_nutrition_radar(nut_info["totals"], projected_recipe_nutrition=recipe_nut)
-                                        small_fig.update_layout(
-                                            margin=dict(l=10, r=10, t=10, b=10),
-                                            showlegend=False
-                                        )
-                                        st.plotly_chart(small_fig, use_container_width=True, key=f"radar_seen_{item['id']}")
+                                    # Pre-load the nutrition data in the background
+                                    get_recipe_nutrition(rid)
 
                                     st.write(f"👀 Viewed: {item['seen_at'][:10]}")
                                     
