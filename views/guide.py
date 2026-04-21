@@ -51,7 +51,23 @@ def show():
     st.write("")
     with st.container(border=True):
         st.title(f"Step {current_step + 1}")
-        st.write(f"### {directions[current_step]}")
+        
+        # Pull a specific picture for exactly what this cooking step instructs
+        step_text = directions[current_step]
+        
+        # Grab the first 4 long words of the step text as a generic query to Unsplash
+        # (e.g. "Preheat the oven to 450 degrees" -> "Preheat oven degrees")
+        step_words = [w for w in step_text.split() if len(w) > 2]
+        search_query = " ".join(step_words[:4]) if step_words else recipe.get("recipe_title", "cooking")
+        
+        # Structure layout to picture on left, description on right
+        col_img, col_text = st.columns(2)
+        with col_img:
+            display_recipe_image(search_query, key_suffix=f"guide_{recipe_id}_{current_step}")
+        
+        with col_text:
+            st.write(f"### {step_text}")
+        
         st.write("")
         st.write("")
         

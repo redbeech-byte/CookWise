@@ -38,6 +38,7 @@ def show():
         
         st.write("")
         if st.button("🧑‍🍳 Start Interactive Cooking Guide", type="primary", use_container_width=True, key=f"guide_{recipe_id}"):
+            mark_recipe_cooked(recipe_id)
             switch_page("Guide")
             
         col_c, col_s = st.columns(2)
@@ -49,20 +50,26 @@ def show():
             if st.button("💾 Save to Library", use_container_width=True, key=f"save_{recipe_id}"):
                 save_recipe(recipe_id)
                 st.success("Saved!")
-
-            
-    
-    
-
-    
-    st.subheader("Ingredients")
-    ingredients = get_ingredients_for_recipe(recipe_id)
-    if ingredients:
-        for ing in ingredients:
-            # We can show pure_ingredient_harsh or original_string
-            st.markdown(f"- {ing.get('original_string')} (*Cleaned*: {ing.get('pure_ingredient_harsh', ing.get('pure_ingredient_harsh'))})")
-    else:
-        st.write("No ingredients listed.")
+    with st.container():
+        ingredients_col, nut_col = st.columns(2)
+        with nut_col:
+            st.subheader("Nutrition Impact (Weekly % DV)")
+            from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar, get_recipe_nutrition
+            with st.spinner("Analyzing nutrition..."):
+                recipe_nut = get_recipe_nutrition(recipe_id)
+                nut_info = get_past_7_days_nutrition()
+                fig = draw_nutrition_radar(nut_info["totals"], projected_recipe_nutrition=recipe_nut)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with ingredients_col:
+            st.subheader("Ingredients")
+            ingredients = get_ingredients_for_recipe(recipe_id)
+            if ingredients:
+                for ing in ingredients:
+                    # We can show pure_ingredient_harsh or original_string
+                    st.markdown(f"- {ing.get('original_string')} (*Cleaned*: {ing.get('pure_ingredient_harsh', ing.get('pure_ingredient_harsh'))})")
+            else:
+                st.write("No ingredients listed.")
         
     st.subheader("Directions")
     directions_str = recipe.get("directions", "[]")

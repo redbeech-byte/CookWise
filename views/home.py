@@ -29,9 +29,11 @@ def show():
     with graph:
         st.subheader("")
         with st.container(border=True):
-            #on the top left there should be a graph which is for now a picture placeholder
-            picture_path = os.path.join(os.path.dirname(__file__), "..", "pictures", "graph_placeholder.png")
-            st.image(picture_path, caption="Your Cooking Activity")
+            from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar
+            with st.spinner("Loading nutrition info..."):
+                nut_info = get_past_7_days_nutrition()
+                fig = draw_nutrition_radar(nut_info["totals"])
+                st.plotly_chart(fig, use_container_width=True)
 
     # Database recipes
     recipes = search_recipes("", limit=6)
