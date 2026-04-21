@@ -101,7 +101,6 @@ def main():
             #show the title of the page that will be displayed below the navigation bar
             st.title(PAGE_TITLES.get(st.session_state.current_page, lambda: st.session_state.current_page)())
         with home_button:
-            st.empty()
             btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
             if st.button("Home", width='stretch', type=btn_type):
                 if st.session_state.current_page != "Home":

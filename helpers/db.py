@@ -7,7 +7,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "recipes.db")
 def get_connection():
     return sqlite3.connect(DB_PATH)
 
-def search_recipes(query, limit=50, max_time=None, difficulty=None, dietary_prefs=None):
+def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=None, dietary_prefs=None):
     query = query.strip()
     with get_connection() as conn:
         # Base query string
@@ -31,6 +31,10 @@ def search_recipes(query, limit=50, max_time=None, difficulty=None, dietary_pref
         if max_time:
             sql += " AND (r.est_prep_time_min + r.est_cook_time_min) <= ?"
             params.append(max_time)
+
+        if min_time:
+            sql += " AND (r.est_prep_time_min + r.est_cook_time_min) >= ?"
+            params.append(min_time)
             
         if difficulty and difficulty != "Any":
             sql += " AND r.difficulty = ?"

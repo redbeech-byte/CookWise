@@ -109,7 +109,7 @@ def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
         return [d.get(c, 0) for c in categories] + [d.get(categories[0], 0)]
         
     actual_vals = to_list(totals)
-    target_vals = [100] * 7 # 100% of weekly target
+    target_vals = [100] * 7 # 100% of daily target
     
     fig = go.Figure()
     
@@ -118,7 +118,7 @@ def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
         r=target_vals,
         theta=cats_loop,
         fill='none',
-        name='Weekly Target (100%)',
+        name='Daily Target (100%)',
         line=dict(color='blue', dash='dash', width=2)
     ))
     
@@ -127,16 +127,16 @@ def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
         r=actual_vals,
         theta=cats_loop,
         fill='toself',
-        name='Current 7 Days',
+        name='Daily Avg (Past 7 Days)',
         line=dict(color='red', width=2)
     ))
     
     # Projected
     if projected_recipe_nutrition:
-        # Add the new recipe's fraction to current totals
+        # Show expected daily total (avg + this recipe)
         proj_vals = []
         for i, c in enumerate(categories):
-            proj_vals.append(actual_vals[i] + (projected_recipe_nutrition.get(c, 0) / 7.0))
+            proj_vals.append(actual_vals[i] + projected_recipe_nutrition.get(c, 0))
         proj_vals.append(proj_vals[0]) # Loop it
         
         fig.add_trace(go.Scatterpolar(
@@ -147,11 +147,12 @@ def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
             line=dict(color='green', dash='dot', width=2)
         ))
         
+    max_val = max(actual_vals) if not projected_recipe_nutrition else max(max(actual_vals), max(proj_vals))
     fig.update_layout(
         polar=dict(
             radialaxis=dict(
                 visible=True,
-                range=[0, max(120, max(actual_vals) * 1.2)]
+                range=[0, max(120, max_val * 1.2)]
             )
         ),
         showlegend=True,
