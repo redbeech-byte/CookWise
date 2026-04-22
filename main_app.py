@@ -1,23 +1,23 @@
-
-from views import guide, home, recipe_details, search, profile, scan
+import streamlit as st
+import time
+import os
 from helpers.switch_page import switch_page
 from helpers.supabase_client import login, signup, logout, get_current_user
-import time
-import streamlit as st
 
+# Global app config
 st.set_page_config(page_title="CookWise", layout="wide")
-st.logo("/Users/geromeracordon/Dokumente/CS/project/github/CookWise/pictures/logoName.svg", size="large")
+logo_path = os.path.join(os.path.dirname(__file__), "pictures", "logoName.svg")
+st.logo(logo_path, size="large")
 
-
+# Use lazy-imports or imports in specific view show_title functions
 PAGE_TITLES = {
-    "Home": home.show_title,
-    "Search": search.show_title,
-    "Scan": scan.show_title,
-    "Recipe Details": recipe_details.show_title,
-    "Profile": profile.show_title,
-    "Guide": guide.show_title
+    "Home": lambda: "Home",
+    "Search": lambda: "Search Recipes",
+    "Scan": lambda: "FridgeScan",
+    "Recipe Details": lambda: "Recipe Details",
+    "Profile": lambda: "Profile",
+    "Guide": lambda: "Cooking Guide"
 }
-
 
 def initialize_state():
     if 'current_page' not in st.session_state:
@@ -27,9 +27,9 @@ def initialize_state():
     if 'page_history' not in st.session_state:
         st.session_state.page_history = ["Home"]
     
-    # Check supabase session ONLY if we haven't initialized it yet
     if 'authenticated' not in st.session_state:
         try:
+            # Check auth status once per refresh cycle (cache results locally in session)
             user = get_current_user()
             if user and hasattr(user, 'user') and user.user:
                 st.session_state.authenticated = True
@@ -41,16 +41,13 @@ def initialize_state():
             st.session_state.authenticated = False
 
 def auth_screen():
-    # Squeezes the login box into the middle of the screen
     spacer_left, content, spacer_right = st.columns([1, 2, 1])
-    
     with content:
         with st.container(border=True):
             st.title("👨‍🍳 Login / Signup")
             st.write("Please log in or sign up to access your recipes.")
             
             tab1, tab2 = st.tabs(["Login", "Sign Up"])
-            
             with tab1:
                 with st.form("login_form"):
                     email = st.text_input("Email")
@@ -66,7 +63,6 @@ def auth_screen():
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Login failed: {e}")
-                            
             with tab2:
                 with st.form("signup_form"):
                     new_email = st.text_input("Email")
@@ -77,83 +73,70 @@ def auth_screen():
                         try:
                             res = signup(new_email, new_password, new_username)
                             if res and res.user:
-                                st.success("Signup successful! Please confirm your email or log in if auto-confirmed.")
+                                st.success("Signup successful! Log in to get started.")
                         except Exception as e:
                             st.error(f"Signup failed: {e}")
 
 def main():
     initialize_state()
 
-    if not st.session_state.authenticated:
+    if not st.session_state.get('authenticated'):
         auth_screen()
         return
 
-
-
-
     # --- TOP TAB NAVIGATION ---
-    # Only show the tabs if we are on the main pages (not deep in a recipe)
-    # change background color of the following container
     with st.container(border=False):
-        page_title,home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
+        page_title_col, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
         
-        with page_title:
-            #show the title of the page that will be displayed below the navigation bar
-            st.title(PAGE_TITLES.get(st.session_state.current_page, lambda: st.session_state.current_page)())
+        with page_title_col:
+            title_text = PAGE_TITLES.get(st.session_state.current_page, lambda: st.session_state.current_page)()
+            st.title(title_text)
+
         with home_button:
             btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
-            if st.button("Home", width='stretch', type=btn_type):
-                if st.session_state.current_page != "Home":
-                    switch_page("Home")
+            st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",))
 
         with search_button:
             btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
-            if st.button("Search", width='stretch', type=btn_type):
-                if st.session_state.current_page != "Search":
-                    switch_page("Search")
+            st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",))
 
         with scan_button:
             btn_type = "primary" if st.session_state.current_page == "Scan" else "secondary"
-            if st.button("FridgeScan", width='stretch', type=btn_type):
-                if st.session_state.current_page != "Scan":
-                    switch_page("Scan")
+            st.button("FridgeScan", width='stretch', type=btn_type, on_click=switch_page, args=("Scan",))
 
         with goback_button:
-            if st.button("⬅️", width='stretch', help="Go Back"):
-                if st.session_state.page_history:
-                    st.session_state.page_history.pop()  # Remove current page
-                    if st.session_state.page_history:
-                        last_page = st.session_state.page_history.pop()  # Get last page
-                        switch_page(last_page)
-                    else:
-                        switch_page("Home")
+            from helpers.switch_page import go_back
+            st.button("⬅️", width='stretch', help="Go Back", on_click=go_back)
 
         with profile_btn:
             btn_type = "primary" if st.session_state.current_page == "Profile" else "secondary"
-            if st.button(f"👤 Profile", width='stretch', type=btn_type):
-                if st.session_state.current_page != "Profile":
-                    switch_page("Profile")
+            st.button(f"👤 Profile", width='stretch', type=btn_type, on_click=switch_page, args=("Profile",))
 
         with logout_btn:
-            if st.button("🚪", width='stretch', type="secondary", help="Logout"):
-                logout()
-                st.session_state.authenticated = False
-                st.rerun()
+            st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=logout)
 
-    st.divider()  # Add a divider below the navigation bar
+    st.divider()
 
     # --- PAGE ROUTING ---
-    if st.session_state.current_page == "Home":
+    # Lazy-loading views only when needed
+    curr = st.session_state.current_page
+    if curr == "Home":
+        from views import home
         home.show()
-    elif st.session_state.current_page == "Search":
+    elif curr == "Search":
+        from views import search
         search.show()
-    elif st.session_state.current_page == "Scan":
+    elif curr == "Scan":
+        from views import scan
         scan.show()
-    elif st.session_state.current_page == "Recipe Details":
+    elif curr == "Recipe Details":
+        from views import recipe_details
         recipe_details.show()
-    elif st.session_state.current_page == "Profile":
+    elif curr == "Profile":
+        from views import profile
         profile.show()
-    elif st.session_state.current_page == "Guide":
+    elif curr == "Guide":
+        from views import guide
         guide.show()
 
 if __name__ == "__main__":
