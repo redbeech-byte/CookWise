@@ -11,9 +11,8 @@ PREFERENCES = ["Spicy", "Sweet", "Savory", "Umami", "Fast", "Slow", "Easy", "Har
 
 def show_title():
     return "My Profile & Library"
-def show():
 
-    
+def show():
     profile = get_profile()
     if not profile:
         st.warning("Could not load your profile. Are you logged in?")
@@ -21,10 +20,8 @@ def show():
 
     st.write(f"### Hello, {profile.get('username') or 'Chef'}! 🍳")
     
-    tabs = st.tabs(["Personal Library", "Preferences", "Cooking History", "Recently Seen"])
+    tabs = st.tabs(["Personal Library", "Preferences", "Cooking History", "Security"])
     
-    from helpers.nutrition_helper import get_recipe_nutrition
-
     with tabs[0]:
         st.subheader("Saved Recipes")
         saved = get_saved_recipes()
@@ -41,28 +38,29 @@ def show():
                             with cols[j]:
                                 with st.container(border=True):
                                     display_recipe_image(r.get('recipe_title', 'recipe'), key_suffix=f"save_{item['id']}")
-                                    
                                     title = r.get("recipe_title", "Unknown Title")
                                     if len(title) > 50:
                                         title = title[:47] + "..."
-                                        
                                     st.write(f"**{title}**")
-
-                                    # Pre-load the nutrition data in the background
-                                    get_recipe_nutrition(rid)
-
                                     st.write(f"🕒 Saved: {item['saved_at'][:10]}")
-                                    
                                     st.write("")
                                     col_v, col_r = st.columns(2)
                                     with col_v:
-                                        if st.button("👨‍🍳 View", key=f"view_save_{item['id']}", use_container_width=True):
-                                            st.session_state.selected_recipe = rid
-                                            switch_page("Recipe Details")
+                                        st.button(
+                                            "👨‍🍳 View", 
+                                            key=f"view_save_{item['id']}", 
+                                            use_container_width=True,
+                                            on_click=switch_page,
+                                            args=("Recipe Details", rid)
+                                        )
                                     with col_r:
-                                        if st.button("❌ Remove", key=f"rm_save_{item['id']}", use_container_width=True):
-                                            remove_saved_recipe(rid)
-                                            st.rerun()
+                                        st.button(
+                                            "❌ Remove", 
+                                            key=f"rm_save_{item['id']}", 
+                                            use_container_width=True,
+                                            on_click=remove_saved_recipe,
+                                            args=(rid,)
+                                        )
         else:
             st.info("You haven't saved any recipes yet.")
             
@@ -78,14 +76,7 @@ def show():
         rest_cols = st.columns(4)
         for idx, rest in enumerate(RESTRICTIONS):
             with rest_cols[idx % 4]:
-                is_toggled = st.toggle(rest, value=(rest in curr_rest))
-                
-                if rest == "Vegan" and is_toggled and "Vegan" not in curr_rest:
-                    st.toast("We don't do that here...", icon="🥩")
-                    logout()
-                    st.session_state.authenticated = False
-                    st.rerun()
-                    
+                is_toggled = st.toggle(rest, value=(rest in curr_rest), key=f"rest_{rest}")
                 if is_toggled:
                     selected_restrictions.append(rest)
                     
@@ -94,45 +85,15 @@ def show():
         pref_cols = st.columns(4)
         for idx, pref in enumerate(PREFERENCES):
             with pref_cols[idx % 4]:
-                if st.toggle(pref, value=(pref in curr_pref)):
+                if st.toggle(pref, value=(pref in curr_pref), key=f"pref_{pref}"):
                     selected_preferences.append(pref)
                     
         st.write("")
-        if st.button("💾 Save Preferences", type="primary"):
+        def save_prefs():
             update_profile(selected_restrictions, selected_preferences)
-            st.success("Preferences updated!")
+            st.toast("Preferences updated!")
             
-        st.divider()
-        st.subheader("Security & Account")
-        
-        col_sec1, col_sec2 = st.columns(2)
-        with col_sec1:
-            with st.container(border=True):
-                st.write("**🔐 Change Password**")
-                new_pw = st.text_input("New Password", type="password")
-                conf_pw = st.text_input("Confirm Password", type="password")
-                if st.button("Update Password"):
-                    if new_pw and new_pw == conf_pw:
-                        try:
-                            update_password(new_pw)
-                            st.success("Password updated successfully!")
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-                    else:
-                        st.warning("Passwords must match and cannot be empty.")
-                        
-        with col_sec2:
-            with st.container(border=True):
-                st.write("**⚠️ Danger Zone**")
-                st.write("Deleting your account is permanent. All saved recipes and cooking history will be lost.")
-                confirm_del = st.checkbox("I understand the consequences, delete my account.")
-                if st.button("❌ Delete Account", type="primary", disabled=not confirm_del):
-                    try:
-                        delete_account()
-                        st.session_state.authenticated = False
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error deleting account: {str(e)}")
+        st.button("💾 Save Preferences", type="primary", on_click=save_prefs)
                 
     with tabs[2]:
         st.subheader("Completed Recipes")
@@ -150,64 +111,53 @@ def show():
                             with cols[j]:
                                 with st.container(border=True):
                                     display_recipe_image(r.get('recipe_title', 'recipe'), key_suffix=f"cook_{item['id']}")
-                                    
                                     title = r.get("recipe_title", "Unknown Title")
                                     if len(title) > 50:
                                         title = title[:47] + "..."
-                                        
                                     st.write(f"**{title}**")
-
-                                    # Pre-load the nutrition data in the background
-                                    get_recipe_nutrition(rid)
-
                                     st.write(f"✅ Cooked: {item['cooked_at'][:10]}")
-                                    
                                     st.write("")
-                                    if st.button("👨‍🍳 View Recipe", key=f"view_cook_{item['id']}", use_container_width=True):
-                                        st.session_state.selected_recipe = rid
-                                        switch_page("Recipe Details")
+                                    st.button(
+                                        "👨‍🍳 View Recipe", 
+                                        key=f"view_cook_{item['id']}", 
+                                        use_container_width=True,
+                                        on_click=switch_page,
+                                        args=("Recipe Details", rid)
+                                    )
         else:
             st.info("No recipes marked as cooked yet.")
             
     with tabs[3]:
-        st.subheader("Recently Viewed")
-        seen_list = get_seen_recipes()
-        if seen_list:
-            seen_ids = set()
-            recent_items = []
-            for item in seen_list:
-                if item["recipe_id"] not in seen_ids:
-                    seen_ids.add(item["recipe_id"])
-                    recent_items.append(item)
-                    
-            cols_per_row = 3
-            for i in range(0, len(recent_items), cols_per_row):
-                cols = st.columns(cols_per_row)
-                for j in range(cols_per_row):
-                    if i + j < len(recent_items):
-                        item = recent_items[i+j]
-                        rid = item["recipe_id"]
-                        r = get_recipe_by_id(rid)
-                        if r:
-                            with cols[j]:
-                                with st.container(border=True):
-                                    display_recipe_image(r.get('recipe_title', 'recipe'), key_suffix=f"seen_{item['id']}")
-                                    
-                                    title = r.get("recipe_title", "Unknown Title")
-                                    if len(title) > 50:
-                                        title = title[:47] + "..."
-                                        
-                                    st.write(f"**{title}**")
+        st.subheader("Security & Account")
+        col_sec1, col_sec2 = st.columns(2)
+        with col_sec1:
+            with st.container(border=True):
+                st.write("**🔐 Change Password**")
+                new_pw = st.text_input("New Password", type="password")
+                conf_pw = st.text_input("Confirm Password", type="password")
+                
+                def do_update_pw():
+                    if new_pw and new_pw == conf_pw:
+                        try:
+                            update_password(new_pw)
+                            st.toast("Password updated successfully!", icon="✅")
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+                    else:
+                        st.warning("Passwords must match and cannot be empty.")
+                
+                st.button("Update Password", on_click=do_update_pw)
+                        
+        with col_sec2:
+            with st.container(border=True):
+                st.write("**⚠️ Danger Zone**")
+                st.write("Deleting your account is permanent.")
+                confirm_del = st.checkbox("I understand the consequences, delete my account.")
+                
+                def do_delete():
+                    try:
+                        delete_account()
+                    except Exception as e:
+                        st.error(f"Error deleting account: {str(e)}")
 
-                                    # Pre-load the nutrition data in the background
-                                    get_recipe_nutrition(rid)
-
-                                    st.write(f"👀 Viewed: {item['seen_at'][:10]}")
-                                    
-                                    st.write("")
-                                    if st.button("👨‍🍳 View Again", key=f"view_seen_{item['id']}", use_container_width=True):
-                                        st.session_state.selected_recipe = rid
-                                        switch_page("Recipe Details")
-        else:
-            st.write("No recently viewed recipes.")
-            
+                st.button("❌ Delete Account", type="primary", disabled=not confirm_del, on_click=do_delete)

@@ -9,7 +9,6 @@ st.set_page_config(page_title="CookWise", layout="wide")
 logo_path = os.path.join(os.path.dirname(__file__), "pictures", "logoName.svg")
 st.logo(logo_path, size="large")
 
-# Use lazy-imports or imports in specific view show_title functions
 PAGE_TITLES = {
     "Home": lambda: "Home",
     "Search": lambda: "Search Recipes",
@@ -29,7 +28,6 @@ def initialize_state():
     
     if 'authenticated' not in st.session_state:
         try:
-            # Check auth status once per refresh cycle (cache results locally in session)
             user = get_current_user()
             if user and hasattr(user, 'user') and user.user:
                 st.session_state.authenticated = True
@@ -67,15 +65,26 @@ def auth_screen():
                 with st.form("signup_form"):
                     new_email = st.text_input("Email")
                     new_username = st.text_input("Username")
-                    new_password = st.text_input("Password", type="password")
+                    new_password = st.text_input("Password", type="password", help="Minimum 6 characters")
                     submitted_signup = st.form_submit_button("Sign Up", type="primary", use_container_width=True)
                     if submitted_signup:
-                        try:
-                            res = signup(new_email, new_password, new_username)
-                            if res and res.user:
-                                st.success("Signup successful! Log in to get started.")
-                        except Exception as e:
-                            st.error(f"Signup failed: {e}")
+                        # Client-side validation
+                        if len(new_password) < 6:
+                            st.error("Password must be at least 6 characters long.")
+                        elif not new_username:
+                            st.error("Please enter a username.")
+                        else:
+                            try:
+                                res = signup(new_email, new_password, new_username)
+                                if res and res.user:
+                                    st.success("Signup successful! Log in to get started.")
+                                    st.info("Note: If you didn't see a success message before but it says user exists, try logging in.")
+                            except Exception as e:
+                                err_str = str(e).lower()
+                                if "already registered" in err_str or "already exists" in err_str:
+                                    st.warning("This email is already registered. Try logging in or resetting your password.")
+                                else:
+                                    st.error(f"Signup failed: {e}")
 
 def main():
     initialize_state()
@@ -86,12 +95,8 @@ def main():
 
     # --- TOP TAB NAVIGATION ---
     with st.container(border=False):
-        page_title_col, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
+        _, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
         
-        with page_title_col:
-            title_text = PAGE_TITLES.get(st.session_state.current_page, lambda: st.session_state.current_page)()
-            st.title(title_text)
-
         with home_button:
             btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
             st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home")
@@ -116,9 +121,12 @@ def main():
 
     st.divider()
 
-    # --- PAGE ROUTING ---
-    # Lazy-loading views only when needed
+    # --- PAGE CONTENT & ROUTING ---
     curr = st.session_state.current_page
+    
+    title_text = PAGE_TITLES.get(curr, lambda: curr)()
+    st.title(title_text)
+
     if curr == "Home":
         from views import home
         home.show()

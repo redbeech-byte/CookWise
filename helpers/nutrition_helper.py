@@ -112,13 +112,10 @@ def call_gemini_nutrition_api(prompt, api_key):
     except Exception as e:
         return False, "", str(e)
 
-def get_past_7_days_nutrition():
-    user = get_current_user()
-    if not user or not user.user:
-        return {"count": 0, "totals": {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}}
-    
+@st.cache_data(ttl=300) # Cache weekly stats for 5 mins
+def get_past_7_days_nutrition(user_id):
     seven_days_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
-    res = supabase.table("cooked_recipes").select("recipe_id").eq("user_id", user.user.id).gte("cooked_at", seven_days_ago).execute()
+    res = supabase.table("cooked_recipes").select("recipe_id").eq("user_id", user_id).gte("cooked_at", seven_days_ago).execute()
     
     cooked_recipes = res.data
     count = len(cooked_recipes)

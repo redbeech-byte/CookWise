@@ -28,9 +28,7 @@ def show_title():
 def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=None):
     if st.session_state.get("last_image_hash") != img_hash:
         with st.spinner("Analyzing ingredients using Gemini 2.5 Flash..."):
-            
             success, result_text, error_msg = call_gemini_api(image_bytes, mime_type, GEMINI_API_KEY_PRIMARY)
-            
             if not success and GEMINI_API_KEY_SECONDARY:
                 st.info("🔄 Primary API key limit reached, switching to secondary key...")
                 success, result_text, error_msg = call_gemini_api(image_bytes, mime_type, GEMINI_API_KEY_SECONDARY)
@@ -54,11 +52,8 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
             
     ingredients_list = st.session_state.get("scanned_ingredients")
     
-    from helpers.nutrition_helper import get_recipe_nutrition
-
     if ingredients_list:
         st.success(f"**Identified Ingredients:** {', '.join(ingredients_list)}")
-        
         recipes = search_recipes_by_ingredients(ingredients_list, limit=12)
         
         if recipes:
@@ -76,7 +71,6 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
                                 if len(title) > 55:
                                     title = title[:52] + "..."
                                 st.write(f"**{title}**")
-                                get_recipe_nutrition(recipe['recipe_id'])
                                 st.write(f"⏱️ {recipe.get('est_prep_time_min', 0)} mins (Matches: {recipe.get('match_count', 0)})")
                                 st.write("")
                                 st.button(
@@ -93,7 +87,6 @@ def call_gemini_api(image_bytes, mime_type, api_key):
     try:
         encoded_image = base64.b64encode(image_bytes).decode("utf-8")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-        
         payload = {
             "contents": [{
                 "parts": [
@@ -110,18 +103,14 @@ def call_gemini_api(image_bytes, mime_type, api_key):
                 "response_mime_type": "application/json"
             }
         }
-        
         response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
-        
         result = response.json()
         candidates = result.get('candidates', [])
         if not candidates:
             return False, "", "No candidates returned from model."
-            
         content_text = candidates[0].get('content', {}).get('parts', [])[0].get('text', '')
         return True, content_text, ""
-        
     except Exception as e:
         return False, "", str(e)
 
@@ -143,7 +132,8 @@ def show():
         if state == "idle":
             READY_FLAG.unlink(missing_ok=True)
             TRIGGER_FLAG.unlink(missing_ok=True)
-            if st.button("📷 Take Photo with iPhone Camera", use_container_width=True):
+            
+            def start_cam():
                 proc = subprocess.Popen(
                     [sys.executable, str(HELPER_SCRIPT),
                      str(CAPTURE_PATH), str(READY_FLAG), str(TRIGGER_FLAG)],
@@ -152,7 +142,9 @@ def show():
                 )
                 PID_FILE.write_text(str(proc.pid))
                 st.session_state["cam_state"] = "starting"
-                st.rerun()
+
+            st.button("📷 Take Photo with iPhone Camera", use_container_width=True, on_click=start_cam)
+
         elif state == "starting":
             if READY_FLAG.exists():
                 st.session_state["cam_state"] = "ready"
@@ -163,10 +155,13 @@ def show():
                 st.rerun()
         elif state == "ready":
             st.success("✅ iPhone is live!")
-            if st.button("📸 Capture now!", use_container_width=True):
+            
+            def trigger_capture():
                 TRIGGER_FLAG.touch()
                 st.session_state["cam_state"] = "capturing"
-                st.rerun()
+            
+            st.button("📸 Capture now!", use_container_width=True, on_click=trigger_capture)
+
         elif state == "capturing":
             trigger_time = 0
             if TRIGGER_FLAG.exists():

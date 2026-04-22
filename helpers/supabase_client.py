@@ -37,23 +37,42 @@ def update_password(new_password):
 
 def delete_account():
     user = get_current_user()
-    if user and hasattr(user, 'user') and user.user:
+    if user and getattr(user, 'user', None):
         user_id = user.user.id
-        supabase.table("profiles").delete().eq("id", user_id).execute()
-        return supabase.auth.sign_out()
+        # Delete profile data
+        supabase.table("user_profiles").delete().eq("id", user_id).execute()
+        # Sign out (Account deletion itself usually requires admin API or re-auth)
+        return logout()
 
 # --- Database helpers ---
 
 def get_profile():
     user = get_current_user()
-    if not user or not user.user:
+    if not user or not getattr(user, 'user', None):
         return None
-    res = supabase.table("user_profiles").select("*").eq("id", user.user.id).execute()
+        
+    user_id = user.user.id
+    res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+    
+    if not res.data:
+        # SELF-HEALING: Profile missing but user exists in Auth. Create it now.
+        username = user.user.user_metadata.get("username", "Chef")
+        try:
+            supabase.table("user_profiles").insert({
+                "id": user_id,
+                "username": username
+            }).execute()
+            # Retry fetch
+            res = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+        except Exception as e:
+            st.error(f"Failed to create missing profile: {e}")
+            return None
+            
     return res.data[0] if res.data else None
 
 def update_profile(dietary_restrictions, cooking_preferences):
     user = get_current_user()
-    if user and user.user:
+    if user and getattr(user, 'user', None):
         supabase.table("user_profiles").update({
             "dietary_restrictions": dietary_restrictions,
             "cooking_preferences": cooking_preferences
@@ -61,7 +80,7 @@ def update_profile(dietary_restrictions, cooking_preferences):
 
 def save_recipe(recipe_id):
     user = get_current_user()
-    if user and user.user:
+    if user and getattr(user, 'user', None):
         try:
             supabase.table("saved_recipes").insert({
                 "user_id": user.user.id,
@@ -69,17 +88,17 @@ def save_recipe(recipe_id):
             }).execute()
             get_saved_recipes.clear()
         except Exception:
-            pass # Already saved
+            pass 
 
 def remove_saved_recipe(recipe_id):
     user = get_current_user()
-    if user and user.user:
+    if user and getattr(user, 'user', None):
         supabase.table("saved_recipes").delete().eq("user_id", user.user.id).eq("recipe_id", recipe_id).execute()
         get_saved_recipes.clear()
 
 def mark_recipe_seen(recipe_id):
     user = get_current_user()
-    if user and user.user:
+    if user and getattr(user, 'user', None):
         supabase.table("seen_recipes").insert({
             "user_id": user.user.id,
             "recipe_id": recipe_id
@@ -88,7 +107,7 @@ def mark_recipe_seen(recipe_id):
 
 def mark_recipe_cooked(recipe_id):
     user = get_current_user()
-    if user and user.user:
+    if user and getattr(user, 'user', None):
         supabase.table("cooked_recipes").insert({
             "user_id": user.user.id,
             "recipe_id": recipe_id
@@ -98,7 +117,7 @@ def mark_recipe_cooked(recipe_id):
 @st.cache_data(ttl=60)
 def get_saved_recipes():
     user = get_current_user()
-    if user and user.user:
+    if user and getattr(user, 'user', None):
         res = supabase.table("saved_recipes").select("*").eq("user_id", user.user.id).order("saved_at", desc=True).execute()
         return res.data
     return []
@@ -106,7 +125,7 @@ def get_saved_recipes():
 @st.cache_data(ttl=60)
 def get_seen_recipes():
     user = get_current_user()
-    if user and user.user:
+    if user and getattr(user, 'user', None):
         res = supabase.table("seen_recipes").select("*").eq("user_id", user.user.id).order("seen_at", desc=True).limit(50).execute()
         return res.data
     return []
@@ -114,7 +133,7 @@ def get_seen_recipes():
 @st.cache_data(ttl=60)
 def get_cooked_recipes():
     user = get_current_user()
-    if user and user.user:
+    if user and getattr(user, 'user', None):
         res = supabase.table("cooked_recipes").select("*").eq("user_id", user.user.id).order("cooked_at", desc=True).execute()
         return res.data
     return []
