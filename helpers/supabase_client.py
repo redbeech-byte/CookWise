@@ -26,13 +26,16 @@ def signup(email, password, username):
     })
 
 def logout():
+    # clear session state and cache related to user
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.cache_data.clear()
     return supabase.auth.sign_out()
     
 def update_password(new_password):
     return supabase.auth.update_user({"password": new_password})
 
 def delete_account():
-    # Only Admin API can fully delete GoTrue auth users. For standard anon clients, we will delete their profile from public tables and sign them out.
     user = get_current_user()
     if user and hasattr(user, 'user') and user.user:
         user_id = user.user.id
@@ -64,6 +67,7 @@ def save_recipe(recipe_id):
                 "user_id": user.user.id,
                 "recipe_id": recipe_id
             }).execute()
+            get_saved_recipes.clear()
         except Exception:
             pass # Already saved
 
@@ -71,6 +75,7 @@ def remove_saved_recipe(recipe_id):
     user = get_current_user()
     if user and user.user:
         supabase.table("saved_recipes").delete().eq("user_id", user.user.id).eq("recipe_id", recipe_id).execute()
+        get_saved_recipes.clear()
 
 def mark_recipe_seen(recipe_id):
     user = get_current_user()
@@ -79,6 +84,7 @@ def mark_recipe_seen(recipe_id):
             "user_id": user.user.id,
             "recipe_id": recipe_id
         }).execute()
+        get_seen_recipes.clear()
 
 def mark_recipe_cooked(recipe_id):
     user = get_current_user()
@@ -87,7 +93,9 @@ def mark_recipe_cooked(recipe_id):
             "user_id": user.user.id,
             "recipe_id": recipe_id
         }).execute()
+        get_cooked_recipes.clear()
 
+@st.cache_data(ttl=60)
 def get_saved_recipes():
     user = get_current_user()
     if user and user.user:
@@ -95,6 +103,7 @@ def get_saved_recipes():
         return res.data
     return []
 
+@st.cache_data(ttl=60)
 def get_seen_recipes():
     user = get_current_user()
     if user and user.user:
@@ -102,6 +111,7 @@ def get_seen_recipes():
         return res.data
     return []
 
+@st.cache_data(ttl=60)
 def get_cooked_recipes():
     user = get_current_user()
     if user and user.user:

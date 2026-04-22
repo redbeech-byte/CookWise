@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 import os
-from helpers.switch_page import switch_page
+from helpers.switch_page import switch_page, go_back
 from helpers.supabase_client import login, signup, logout, get_current_user
 
 # Global app config
@@ -100,12 +100,15 @@ def main():
             btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
             st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",))
 
+        with search_button:
+            btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
+            st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",))
+
         with scan_button:
             btn_type = "primary" if st.session_state.current_page == "Scan" else "secondary"
             st.button("FridgeScan", width='stretch', type=btn_type, on_click=switch_page, args=("Scan",))
 
         with goback_button:
-            from helpers.switch_page import go_back
             st.button("⬅️", width='stretch', help="Go Back", on_click=go_back)
 
         with profile_btn:
