@@ -94,29 +94,25 @@ def main():
 
         with home_button:
             btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
-            st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",))
+            st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home")
 
         with search_button:
             btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
-            st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",))
-
-        with search_button:
-            btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
-            st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",))
+            st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",), key="nav_search")
 
         with scan_button:
             btn_type = "primary" if st.session_state.current_page == "Scan" else "secondary"
-            st.button("FridgeScan", width='stretch', type=btn_type, on_click=switch_page, args=("Scan",))
+            st.button("FridgeScan", width='stretch', type=btn_type, on_click=switch_page, args=("Scan",), key="nav_scan")
 
         with goback_button:
-            st.button("⬅️", width='stretch', help="Go Back", on_click=go_back)
+            st.button("⬅️", width='stretch', help="Go Back", on_click=go_back, key="nav_back")
 
         with profile_btn:
             btn_type = "primary" if st.session_state.current_page == "Profile" else "secondary"
-            st.button(f"👤 Profile", width='stretch', type=btn_type, on_click=switch_page, args=("Profile",))
+            st.button(f"👤 Profile", width='stretch', type=btn_type, on_click=switch_page, args=("Profile",), key="nav_profile")
 
         with logout_btn:
-            st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=logout)
+            st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=logout, key="nav_logout")
 
     st.divider()
 
