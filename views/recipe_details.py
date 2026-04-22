@@ -57,6 +57,10 @@ def show():
             from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar, get_recipe_nutrition
             with st.spinner("Analyzing nutrition..."):
                 recipe_nut = get_recipe_nutrition(recipe_id)
+                # If everything is 0, it means API quota was hit
+                if not recipe_nut or all(v == 0 for v in recipe_nut.values()):
+                    st.warning("Nutrition data momentarily unavailable (API Quota Reached).")
+                
                 nut_info = get_past_7_days_nutrition()
                 fig = draw_nutrition_radar(nut_info["totals"], projected_recipe_nutrition=recipe_nut)
                 st.plotly_chart(fig, use_container_width=True)

@@ -1,14 +1,16 @@
 import streamlit as st
 import sqlite3
 import json
+import re
+import requests
 import plotly.graph_objects as go
-import google.generativeai as genai
 from helpers.db import DB_PATH, get_recipe_by_id, get_ingredients_for_recipe
 from helpers.supabase_client import supabase, get_current_user
 import datetime
 
-# Configure Gemini
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+# Primary and Secondary API Keys from st.secrets
+GEMINI_API_KEY_PRIMARY = st.secrets["GEMINI_API_KEY"]
+GEMINI_API_KEY_SECONDARY = st.secrets.get("GEMINI_API_KEY_SECONDARY")
 
 def get_db_connection():
     return sqlite3.connect(DB_PATH)
@@ -28,6 +30,7 @@ def init_nutrition_table():
         """)
 
 def get_recipe_nutrition(recipe_id):
+    recipe_id = str(recipe_id)
     init_nutrition_table()
     with get_db_connection() as conn:
         res = conn.execute("SELECT proteins, carbs, sugar, vitamins, salt, fats FROM recipe_nutrition WHERE recipe_id = ?", (recipe_id,)).fetchone()
@@ -57,15 +60,27 @@ def get_recipe_nutrition(recipe_id):
         "Salt": <float>,
         "Fats": <float>
     }}
-    Do not include any other text or markdown formatting like ```json.
+    Do not include any other text, reasoning, or markdown.
     """
     
-    # We use a cheap models
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    # Use Primary Key
+    success, result_text, error_msg = call_gemini_nutrition_api(prompt, GEMINI_API_KEY_PRIMARY)
+    
+    # Fallback to Secondary Key
+    if not success and GEMINI_API_KEY_SECONDARY:
+        success, result_text, error_msg = call_gemini_nutrition_api(prompt, GEMINI_API_KEY_SECONDARY)
+
+    if not success:
+        print(f"Error evaluating nutrition: {error_msg}")
+        return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
+
+    # Extract JSON robustly
+    json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+    if json_match:
+        result_text = json_match.group(0)
+
     try:
-        response = model.generate_content(prompt)
-        text = response.text.replace("```json", "").replace("```", "").strip()
-        data = json.loads(text)
+        data = json.loads(result_text)
         
         # Save to DB
         with get_db_connection() as conn:
@@ -76,8 +91,31 @@ def get_recipe_nutrition(recipe_id):
         
         return data
     except Exception as e:
-        print(f"Error evaluating nutrition: {e}")
+        print(f"Error parsing nutrition JSON: {e}")
         return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
+
+def call_gemini_nutrition_api(prompt, api_key):
+    """Makes a request to the Gemini API using gemini-2.5-flash-lite."""
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "response_mime_type": "application/json"
+            }
+        }
+        response = requests.post(url, json=payload, timeout=20)
+        response.raise_for_status()
+        
+        res_json = response.json()
+        candidates = res_json.get('candidates', [])
+        if not candidates:
+            return False, "", "No candidates"
+            
+        text = candidates[0].get('content', {}).get('parts', [])[0].get('text', '')
+        return True, text, ""
+    except Exception as e:
+        return False, "", str(e)
 
 def get_past_7_days_nutrition():
     user = get_current_user()
@@ -95,8 +133,6 @@ def get_past_7_days_nutrition():
         nut = get_recipe_nutrition(item["recipe_id"])
         if nut:
             for k in totals:
-                # Accumulate weekly fraction (% DV / 700 * 100 = fraction of weekly target in percentage)
-                # simpler: % DV / 7 = percentage of weekly target
                 totals[k] += (nut.get(k, 0) / 7.0)
                 
     return {"count": count, "totals": totals}
@@ -109,11 +145,9 @@ def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
         return [d.get(c, 0) for c in categories] + [d.get(categories[0], 0)]
         
     actual_vals = to_list(totals)
-    target_vals = [100] * 7 # 100% of daily target
+    target_vals = [100] * 7
     
     fig = go.Figure()
-    
-    # 100% Target Ring (WHO recommendation)
     fig.add_trace(go.Scatterpolar(
         r=target_vals,
         theta=cats_loop,
@@ -121,8 +155,6 @@ def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
         name='Daily Target (100%)',
         line=dict(color='blue', dash='dash', width=2)
     ))
-    
-    # Current Actual
     fig.add_trace(go.Scatterpolar(
         r=actual_vals,
         theta=cats_loop,
@@ -130,15 +162,11 @@ def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
         name='Daily Avg (Past 7 Days)',
         line=dict(color='red', width=2)
     ))
-    
-    # Projected
     if projected_recipe_nutrition:
-        # Show expected daily total (avg + this recipe)
         proj_vals = []
         for i, c in enumerate(categories):
             proj_vals.append(actual_vals[i] + projected_recipe_nutrition.get(c, 0))
-        proj_vals.append(proj_vals[0]) # Loop it
-        
+        proj_vals.append(proj_vals[0])
         fig.add_trace(go.Scatterpolar(
             r=proj_vals,
             theta=cats_loop,
@@ -150,13 +178,9 @@ def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
     max_val = max(actual_vals) if not projected_recipe_nutrition else max(max(actual_vals), max(proj_vals))
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, max(120, max_val * 1.2)]
-            )
+            radialaxis=dict(visible=True, range=[0, max(120, max_val * 1.2)])
         ),
         showlegend=True,
         margin=dict(l=40, r=40, t=40, b=40)
     )
     return fig
-

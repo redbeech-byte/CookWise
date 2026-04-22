@@ -3,10 +3,12 @@ from views import guide, home, recipe_details, search, profile, scan
 from helpers.switch_page import switch_page
 from helpers.supabase_client import login, signup, logout, get_current_user
 import time
+import os
 import streamlit as st
 
 st.set_page_config(page_title="CookWise", layout="wide")
-st.logo("/Users/geromeracordon/Dokumente/CS/project/github/CookWise/pictures/logoName.svg", size="large")
+logo_path = os.path.join(os.path.dirname(__file__), "pictures", "logoName.svg")
+st.logo(logo_path, size="large")
 
 
 PAGE_TITLES = {
@@ -102,43 +104,28 @@ def main():
             st.title(PAGE_TITLES.get(st.session_state.current_page, lambda: st.session_state.current_page)())
         with home_button:
             btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
-            if st.button("Home", width='stretch', type=btn_type):
-                if st.session_state.current_page != "Home":
-                    switch_page("Home")
+            st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",))
 
         with search_button:
             btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
-            if st.button("Search", width='stretch', type=btn_type):
-                if st.session_state.current_page != "Search":
-                    switch_page("Search")
+            st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",))
 
         with scan_button:
             btn_type = "primary" if st.session_state.current_page == "Scan" else "secondary"
-            if st.button("FridgeScan", width='stretch', type=btn_type):
-                if st.session_state.current_page != "Scan":
-                    switch_page("Scan")
+            st.button("FridgeScan", width='stretch', type=btn_type, on_click=switch_page, args=("Scan",))
 
         with goback_button:
-            if st.button("⬅️", width='stretch', help="Go Back"):
-                if st.session_state.page_history:
-                    st.session_state.page_history.pop()  # Remove current page
-                    if st.session_state.page_history:
-                        last_page = st.session_state.page_history.pop()  # Get last page
-                        switch_page(last_page)
-                    else:
-                        switch_page("Home")
+            from helpers.switch_page import go_back
+            st.button("⬅️", width='stretch', help="Go Back", on_click=go_back)
 
         with profile_btn:
             btn_type = "primary" if st.session_state.current_page == "Profile" else "secondary"
-            if st.button(f"👤 Profile", width='stretch', type=btn_type):
-                if st.session_state.current_page != "Profile":
-                    switch_page("Profile")
+            st.button(f"👤 Profile", width='stretch', type=btn_type, on_click=switch_page, args=("Profile",))
 
         with logout_btn:
-            if st.button("🚪", width='stretch', type="secondary", help="Logout"):
+            def do_logout():
                 logout()
-                st.session_state.authenticated = False
-                st.rerun()
+            st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=do_logout)
 
     st.divider()  # Add a divider below the navigation bar
 
