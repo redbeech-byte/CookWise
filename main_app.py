@@ -6,8 +6,13 @@ from helpers.supabase_client import login, signup, logout, get_current_user
 
 # Global app config
 st.set_page_config(page_title="CookWise", layout="wide")
-logo_path = os.path.join(os.path.dirname(__file__), "pictures", "logoName.svg")
-st.logo(logo_path, size="large")
+
+# Robust absolute path for the logo to fix friend's macOS issue
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+logo_path = os.path.join(CURRENT_DIR, "pictures", "logoName.svg")
+
+if os.path.exists(logo_path):
+    st.logo(logo_path, size="large")
 
 PAGE_TITLES = {
     "Home": lambda: "Home",
@@ -68,7 +73,6 @@ def auth_screen():
                     new_password = st.text_input("Password", type="password", help="Minimum 6 characters")
                     submitted_signup = st.form_submit_button("Sign Up", type="primary", use_container_width=True)
                     if submitted_signup:
-                        # Client-side validation
                         if len(new_password) < 6:
                             st.error("Password must be at least 6 characters long.")
                         elif not new_username:

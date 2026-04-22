@@ -3,17 +3,19 @@ import pandas as pd
 import os
 import streamlit as st
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "recipes.db")
+# Robust absolute path for the database file
+HELPERS_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.normpath(os.path.join(HELPERS_DIR, "..", "data", "recipes.db"))
 
 @st.cache_resource
 def get_connection():
+    # check_same_thread=False is needed for SQLite in Streamlit's multi-threaded environment
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 @st.cache_data(ttl=3600)
 def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=None, dietary_prefs=None):
     query = query.strip()
     conn = get_connection()
-    # Base query string
     sql = """
         SELECT DISTINCT r.recipe_id, r.recipe_title, r.est_prep_time_min, r.est_cook_time_min, r.main_ingredient, r.difficulty, r.is_vegan, r.is_vegetarian, r.is_gluten_free
         FROM recipes r
@@ -23,7 +25,6 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
     """
     
     params = []
-    
     if query:
         sql += " AND (r.recipe_title LIKE ? OR i.original_string LIKE ? OR i.pure_ingredient_harsh LIKE ?)"
         like_query = f"%{query}%"
