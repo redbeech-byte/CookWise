@@ -59,7 +59,28 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
     params.append(limit)
     
     df = pd.read_sql(sql, conn, params=tuple(params))
-    return df.to_dict(orient="records")
+    recipes = df.to_dict(orient="records")
+    return deduplicate_recipes(recipes)
+
+def deduplicate_recipes(recipes):
+    """
+    Deduplicates a list of recipe dictionaries by recipe_id and then by recipe_title (case-insensitive).
+    """
+    unique_recipes = []
+    seen_ids = set()
+    seen_titles = set()
+    
+    for recipe in recipes:
+        recipe_id = recipe.get('recipe_id')
+        recipe_title = str(recipe.get('recipe_title', '')).strip().lower()
+        
+        if recipe_id not in seen_ids and recipe_title not in seen_titles:
+            unique_recipes.append(recipe)
+            seen_ids.add(recipe_id)
+            if recipe_title:
+                seen_titles.add(recipe_title)
+            
+    return unique_recipes
 
 @st.cache_data(ttl=3600)
 def get_recipe_by_id(recipe_id):
@@ -104,4 +125,5 @@ def search_recipes_by_ingredients(ingredients_list, limit=10):
     """
     params.append(limit)
     df = pd.read_sql(sql, conn, params=params)
-    return df.to_dict(orient="records")
+    recipes = df.to_dict(orient="records")
+    return deduplicate_recipes(recipes)

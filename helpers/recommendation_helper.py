@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import streamlit as st
-from helpers.db import get_connection
+from helpers.db import get_connection, deduplicate_recipes
 from helpers.supabase_client import get_saved_recipes, get_cooked_recipes
 
 @st.cache_data(ttl=86400)
@@ -74,5 +74,7 @@ def get_recommended_recipes(limit=10):
     target_df = target_df.copy()
     target_df['distance'] = distances
     
-    recommended = target_df.sort_values('distance').head(limit)
-    return recommended.to_dict(orient="records")
+    # Get a bit more than limit to allow for deduplication
+    recommended = target_df.sort_values('distance').head(limit * 2)
+    recipes = recommended.to_dict(orient="records")
+    return deduplicate_recipes(recipes)[:limit]
