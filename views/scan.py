@@ -12,12 +12,9 @@ from helpers.db import search_recipes_by_ingredients
 from helpers.switch_page import switch_page
 from helpers.image_helper import display_recipe_image
 from helpers.nutrition_helper import get_recipe_nutrition
-from helpers.supabase_client import get_profile
+from helpers.supabase_client import get_profile, get_vault_secrets
 
-# Load API keys
-GEMINI_API_KEY_PRIMARY = st.secrets["GEMINI_API_KEY"]
-GEMINI_API_KEY_SECONDARY = st.secrets.get("GEMINI_API_KEY_SECONDARY")
-
+# Camera Paths
 CAPTURE_PATH  = Path(__file__).parent.parent / "data" / "iphone_capture.jpg"
 HELPER_SCRIPT = Path(__file__).parent.parent / "helpers" / "continuity_camera_helper.py"
 READY_FLAG    = Path(__file__).parent.parent / "data" / ".cam_ready"
@@ -31,13 +28,22 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
     if st.session_state.get("last_image_hash") != img_hash:
         with st.spinner("Analyzing ingredients using Gemini 2.5 Flash..."):
             
+            # Fetch keys from Vault
+            vault = get_vault_secrets()
+            api_key_primary = vault.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
+            api_key_secondary = vault.get("GEMINI_API_KEY_SECONDARY") or st.secrets.get("GEMINI_API_KEY_SECONDARY")
+
+            if not api_key_primary:
+                st.error("Gemini API Key missing.")
+                return
+
             # Primary attempt
-            success, result_text, error_msg = call_gemini_api(image_bytes, mime_type, GEMINI_API_KEY_PRIMARY)
+            success, result_text, error_msg = call_gemini_api(image_bytes, mime_type, api_key_primary)
             
             # Secondary fallback if primary fails (e.g. 429 Limit reached)
-            if not success and GEMINI_API_KEY_SECONDARY:
+            if not success and api_key_secondary:
                 st.info("🔄 Primary API key limit reached, switching to secondary key...")
-                success, result_text, error_msg = call_gemini_api(image_bytes, mime_type, GEMINI_API_KEY_SECONDARY)
+                success, result_text, error_msg = call_gemini_api(image_bytes, mime_type, api_key_secondary)
 
             if not success:
                 st.error(f"Error communicating with Gemini API: {error_msg}")

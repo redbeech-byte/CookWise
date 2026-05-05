@@ -5,11 +5,7 @@ import requests
 import plotly.graph_objects as go
 import datetime
 from helpers.db import get_recipe_by_id, get_ingredients_for_recipe
-from helpers.supabase_client import supabase, get_current_user
-
-# Primary and Secondary API Keys from st.secrets
-GEMINI_API_KEY_PRIMARY = st.secrets["GEMINI_API_KEY"]
-GEMINI_API_KEY_SECONDARY = st.secrets.get("GEMINI_API_KEY_SECONDARY")
+from helpers.supabase_client import supabase, get_current_user, get_vault_secrets
 
 # Standardized WHO Reference Values for an average adult (2000 kcal)
 WHO_REFERENCES = {
@@ -84,9 +80,23 @@ def get_recipe_nutrition(recipe_id):
     }}
     """
     
-    success, result_text, error_msg = call_gemini_nutrition_api(prompt, GEMINI_API_KEY_PRIMARY)
-    if not success and GEMINI_API_KEY_SECONDARY:
-        success, result_text, error_msg = call_gemini_nutrition_api(prompt, GEMINI_API_KEY_SECONDARY)
+    # Use Primary and Secondary API Keys from Vault
+    vault = get_vault_secrets()
+    api_key_primary = vault.get("GEMINI_API_KEY")
+    api_key_secondary = vault.get("GEMINI_API_KEY_SECONDARY")
+    
+    if not api_key_primary:
+        # Fallback to local secrets if vault is empty/fails
+        api_key_primary = st.secrets.get("GEMINI_API_KEY")
+        api_key_secondary = st.secrets.get("GEMINI_API_KEY_SECONDARY")
+
+    if not api_key_primary:
+        st.error("Gemini API Key missing in Vault and local secrets.")
+        return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
+
+    success, result_text, error_msg = call_gemini_nutrition_api(prompt, api_key_primary)
+    if not success and api_key_secondary:
+        success, result_text, error_msg = call_gemini_nutrition_api(prompt, api_key_secondary)
 
     if not success:
         return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}

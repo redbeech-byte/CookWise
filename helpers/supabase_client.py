@@ -1,13 +1,30 @@
 import streamlit as st
 from supabase import create_client, Client
 
+# Supabase Project Configuration (Public/Client-side)
+SUPABASE_URL = "https://oztujhafgvuaowznmzql.supabase.co"
+SUPABASE_KEY = "sb_publishable_Ny6S6HQCCOoiVP-t8IWttA_bt3B8WiY"
+
 @st.cache_resource
 def init_supabase() -> Client:
-    url: str = st.secrets["SUPABASE_URL"]
-    key: str = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
+    # Use embedded credentials for zero-setup onboarding
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 supabase: Client = init_supabase()
+
+@st.cache_data(ttl=3600)
+def get_vault_secrets():
+    """
+    Retrieves sensitive API keys from Supabase Vault.
+    Requires user to be authenticated to succeed.
+    """
+    try:
+        res = supabase.rpc("get_secrets").execute()
+        secrets_dict = {item['name']: item['value'] for item in res.data}
+        return secrets_dict
+    except Exception as e:
+        st.error(f"Failed to load secrets from Vault: {e}")
+        return {}
 
 def get_current_user():
     return supabase.auth.get_user()

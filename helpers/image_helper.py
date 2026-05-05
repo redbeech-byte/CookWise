@@ -3,6 +3,7 @@ import requests
 import streamlit as st
 import random
 from collections import deque
+from helpers.supabase_client import get_vault_secrets
 
 APP_NAME_TRACKING = "?utm_source=MyRecipeApp&utm_medium=referral"
 
@@ -11,12 +12,19 @@ def _fetch_unsplash_results(query: str):
     search_query = f"{query} food"
     url = "https://api.unsplash.com/search/photos"
     
+    # Fetch key from Vault
+    vault = get_vault_secrets()
+    access_key = vault.get("UNSPLASH_ACCESS_KEY") or st.secrets.get("UNSPLASH_ACCESS_KEY")
+    
+    if not access_key:
+        return []
+
     def fetch(q):
         params = {
             "query": q,
             "per_page": 30,
             "orientation": "landscape",
-            "client_id": st.secrets["UNSPLASH_ACCESS_KEY"]
+            "client_id": access_key
         }
         try:
             response = requests.get(url, params=params)
@@ -85,7 +93,13 @@ def get_unique_recipe_image_data(query: str):
 
 def trigger_unsplash_download(download_endpoint: str):
     try:
-        params = {"client_id": st.secrets["UNSPLASH_ACCESS_KEY"]}
+        # Fetch key from Vault
+        vault = get_vault_secrets()
+        access_key = vault.get("UNSPLASH_ACCESS_KEY") or st.secrets.get("UNSPLASH_ACCESS_KEY")
+        if not access_key:
+            return
+            
+        params = {"client_id": access_key}
         requests.get(download_endpoint, params=params)
     except Exception:
         pass

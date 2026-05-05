@@ -1,5 +1,5 @@
-# Streamlit secrets and config
-.streamlit/
+# Streamlit config (Allow secrets.toml for public keys)
+.streamlit/config.toml
 
 # Local data and databases
 data/
