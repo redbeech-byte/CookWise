@@ -6,7 +6,8 @@ venv/
 .env
 
 # Local data and databases
-data/
+data/*
+!data/.gitkeep
 
 # Python cache
 __pycache__/
