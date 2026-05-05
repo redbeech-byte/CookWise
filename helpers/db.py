@@ -13,33 +13,23 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
     # Start building the query
     q = supabase.table("recipes").select("*")
     
-    # 1. Full-Text Search
-    if query:
-        # Use the 'fts' column we created for efficient English search
-        q = q.text_search('fts', query)
-        
-    # 2. Basic Filters
+    # 1. Basic Filters
     if difficulty and difficulty != "Any":
         q = q.eq('difficulty', difficulty)
         
     if max_time:
-        # Note: We can't do (prep + cook) easily in PostgREST without a view/rpc,
-        # but for simplicity we'll just filter recipes where the data is already pre-summed
-        # Or we fallback to basic range on prep/cook.
-        # Given the schema, we'll just filter total_time <= max_time
-        q = q.lte('est_prep_time_min', max_time) # Simplified for now
+        q = q.lte('est_prep_time_min', max_time)
         
-    # 3. Dietary Restrictions
+    # 2. Dietary Restrictions
     if dietary_prefs:
         for pref in dietary_prefs:
             col_name = f"is_{pref.lower().replace('-', '_')}"
             q = q.eq(col_name, True)
             
-    # 4. Cooking Preferences (Tastes)
+    # 3. Cooking Preferences (Tastes)
     if cooking_prefs:
         for pref in cooking_prefs:
             if pref in ["Spicy", "Sweet", "Savory", "Umami"]:
-                # Use 'or' filter for primary or secondary taste
                 q = q.or_(f"primary_taste.eq.{pref},secondary_taste.eq.{pref}")
             elif pref == "Fast":
                 q = q.eq("cook_speed", "Fast")
@@ -50,7 +40,15 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
             elif pref == "Hard":
                 q = q.eq("difficulty", "Hard")
 
-    res = q.limit(limit).execute()
+    # Apply limit
+    q = q.limit(limit)
+    
+    # 4. Full-Text Search MUST be applied last because it returns a SyncQueryRequestBuilder
+    # which does not support further method chaining for filters/limits in this version of the client.
+    if query:
+        q = q.text_search('fts', query)
+
+    res = q.execute()
     return deduplicate_recipes(res.data or [])
 
 def deduplicate_recipes(recipes):
