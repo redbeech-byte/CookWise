@@ -12,6 +12,7 @@ from helpers.db import search_recipes_by_ingredients
 from helpers.switch_page import switch_page
 from helpers.image_helper import display_recipe_image
 from helpers.nutrition_helper import get_recipe_nutrition
+from helpers.supabase_client import get_profile
 
 # Load API keys
 GEMINI_API_KEY_PRIMARY = st.secrets["GEMINI_API_KEY"]
@@ -61,7 +62,22 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
     if ingredients_list:
         st.success(f"**Identified Ingredients:** {', '.join(ingredients_list)}")
         
-        recipes = search_recipes_by_ingredients(ingredients_list, limit=12)
+        # Integrate user preferences
+        profile = get_profile()
+        dietary = profile.get("dietary_restrictions", []) if profile else []
+        cooking = profile.get("cooking_preferences", []) if profile else []
+        
+        if dietary or cooking:
+            with st.expander("Applied Dietary & Taste Preferences"):
+                if dietary: st.write(f"**Restrictions:** {', '.join(dietary)}")
+                if cooking: st.write(f"**Taste/Speed:** {', '.join(cooking)}")
+
+        recipes = search_recipes_by_ingredients(
+            ingredients_list, 
+            limit=12,
+            dietary_prefs=dietary,
+            cooking_prefs=cooking
+        )
         
         if recipes:
             st.subheader(f"Matching Recipes ({len(recipes)})")

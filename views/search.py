@@ -2,11 +2,16 @@ import streamlit as st
 from helpers.switch_page import switch_page
 from helpers.db import search_recipes
 from helpers.image_helper import display_recipe_image
+from helpers.supabase_client import get_profile
 
 def show_title():
     return "Search Recipes"
 
 def show():
+    profile = get_profile()
+    profile_dietary = profile.get("dietary_restrictions", []) if profile else []
+    profile_cooking = profile.get("cooking_preferences", []) if profile else []
+
     with st.container(border=True):
         search_bar, spacer, filter_popover = st.columns([9, 1, 2], vertical_alignment="bottom")
 
@@ -22,12 +27,16 @@ def show():
                 col1, col2 = st.columns(2)
                 dietary_prefs = []
                 with col1:
-                    if st.checkbox("Vegan"): dietary_prefs.append("Vegan")
-                    if st.checkbox("Vegetarian"): dietary_prefs.append("Vegetarian")
+                    if st.checkbox("Vegan", value="Vegan" in profile_dietary): dietary_prefs.append("Vegan")
+                    if st.checkbox("Vegetarian", value="Vegetarian" in profile_dietary): dietary_prefs.append("Vegetarian")
+                    if st.checkbox("Halal", value="Halal" in profile_dietary): dietary_prefs.append("Halal")
                 with col2:
-                    if st.checkbox("Gluten-Free"): dietary_prefs.append("Gluten-Free")
-                    if st.checkbox("Dairy-Free"): dietary_prefs.append("Dairy-Free")
-                    if st.checkbox("Nut-Free"): dietary_prefs.append("Nut-Free")
+                    if st.checkbox("Gluten-Free", value="Gluten-Free" in profile_dietary): dietary_prefs.append("Gluten-Free")
+                    if st.checkbox("Dairy-Free", value="Dairy-Free" in profile_dietary): dietary_prefs.append("Dairy-Free")
+                    if st.checkbox("Nut-Free", value="Nut-Free" in profile_dietary): dietary_prefs.append("Nut-Free")
+                
+                if profile_cooking:
+                    st.info(f"Auto-applying cooking preferences: {', '.join(profile_cooking)}")
                     
         with st.spinner("Searching recipes..."):
             results = search_recipes(
@@ -36,7 +45,8 @@ def show():
                 max_time=max_time if max_time < 240 else None,
                 min_time=min_time if min_time > 10 else None,
                 difficulty=difficulty,
-                dietary_prefs=dietary_prefs
+                dietary_prefs=dietary_prefs,
+                cooking_prefs=profile_cooking
             )
     
     st.subheader(f"Results ({len(results)})")

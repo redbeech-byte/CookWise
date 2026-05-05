@@ -13,11 +13,13 @@ def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 @st.cache_data(ttl=3600)
-def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=None, dietary_prefs=None):
+def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=None, dietary_prefs=None, cooking_prefs=None):
     query = query.strip()
     conn = get_connection()
     sql = """
-        SELECT DISTINCT r.recipe_id, r.recipe_title, r.est_prep_time_min, r.est_cook_time_min, r.main_ingredient, r.difficulty, r.is_vegan, r.is_vegetarian, r.is_gluten_free
+        SELECT DISTINCT r.recipe_id, r.recipe_title, r.est_prep_time_min, r.est_cook_time_min, r.main_ingredient, r.difficulty, 
+               r.is_vegan, r.is_vegetarian, r.is_gluten_free, r.is_dairy_free, r.is_nut_free, r.is_halal, r.is_kosher,
+               r.primary_taste, r.cook_speed
         FROM recipes r
         LEFT JOIN recipe_ingredients ri ON r.recipe_id = ri.recipe_id
         LEFT JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
@@ -54,6 +56,24 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
                 sql += " AND r.is_dairy_free = 1"
             elif pref == "Nut-Free":
                 sql += " AND r.is_nut_free = 1"
+            elif pref == "Halal":
+                sql += " AND r.is_halal = 1"
+            elif pref == "Kosher":
+                sql += " AND r.is_kosher = 1"
+
+    if cooking_prefs:
+        for pref in cooking_prefs:
+            if pref in ["Spicy", "Sweet", "Savory", "Umami"]:
+                sql += " AND (r.primary_taste = ? OR r.secondary_taste = ? OR r.tastes LIKE ?)"
+                params.extend([pref, pref, f"%{pref}%"])
+            elif pref == "Fast":
+                sql += " AND (r.cook_speed = 'Fast' OR (r.est_prep_time_min + r.est_cook_time_min) <= 30)"
+            elif pref == "Slow":
+                sql += " AND (r.cook_speed = 'Slow' OR (r.est_prep_time_min + r.est_cook_time_min) >= 60)"
+            elif pref == "Easy":
+                sql += " AND r.difficulty = 'Easy'"
+            elif pref == "Hard":
+                sql += " AND r.difficulty = 'Hard'"
     
     sql += " LIMIT ?"
     params.append(limit)
@@ -104,7 +124,7 @@ def get_ingredients_for_recipe(recipe_id):
     return df.to_dict(orient="records")
 
 @st.cache_data(ttl=3600)
-def search_recipes_by_ingredients(ingredients_list, limit=10):
+def search_recipes_by_ingredients(ingredients_list, limit=10, dietary_prefs=None, cooking_prefs=None):
     if not ingredients_list:
         return []
     conn = get_connection()
@@ -113,12 +133,37 @@ def search_recipes_by_ingredients(ingredients_list, limit=10):
     for ing in ingredients_list:
         params.extend([f"%{ing.lower()}%", f"%{ing.lower()}%"])
         
+    pref_sql = ""
+    if dietary_prefs:
+        for pref in dietary_prefs:
+            if pref == "Vegan": pref_sql += " AND r.is_vegan = 1"
+            elif pref == "Vegetarian": pref_sql += " AND r.is_vegetarian = 1"
+            elif pref == "Gluten-Free": pref_sql += " AND r.is_gluten_free = 1"
+            elif pref == "Dairy-Free": pref_sql += " AND r.is_dairy_free = 1"
+            elif pref == "Nut-Free": pref_sql += " AND r.is_nut_free = 1"
+            elif pref == "Halal": pref_sql += " AND r.is_halal = 1"
+            elif pref == "Kosher": pref_sql += " AND r.is_kosher = 1"
+
+    if cooking_prefs:
+        for pref in cooking_prefs:
+            if pref in ["Spicy", "Sweet", "Savory", "Umami"]:
+                pref_sql += " AND (r.primary_taste = ? OR r.secondary_taste = ? OR r.tastes LIKE ?)"
+                params.extend([pref, pref, f"%{pref}%"])
+            elif pref == "Fast":
+                pref_sql += " AND (r.cook_speed = 'Fast' OR (r.est_prep_time_min + r.est_cook_time_min) <= 30)"
+            elif pref == "Slow":
+                pref_sql += " AND (r.cook_speed = 'Slow' OR (r.est_prep_time_min + r.est_cook_time_min) >= 60)"
+            elif pref == "Easy":
+                pref_sql += " AND r.difficulty = 'Easy'"
+            elif pref == "Hard":
+                pref_sql += " AND r.difficulty = 'Hard'"
+
     sql = f"""
         SELECT r.recipe_id, r.recipe_title, r.est_prep_time_min, r.est_cook_time_min, r.main_ingredient, COUNT(DISTINCT i.ingredient_id) as match_count
         FROM recipes r
         JOIN recipe_ingredients ri ON r.recipe_id = ri.recipe_id
         JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
-        WHERE {placeholders}
+        WHERE ({placeholders}) {pref_sql}
         GROUP BY r.recipe_id
         ORDER BY match_count DESC
         LIMIT ?

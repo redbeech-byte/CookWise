@@ -85,7 +85,10 @@ def show():
 
     recipes = get_recommended_recipes(limit=12)
     if not recipes:
-        recipes = search_recipes("", limit=12)
+        profile = get_profile()
+        dietary = profile.get("dietary_restrictions", []) if profile else []
+        cooking = profile.get("cooking_preferences", []) if profile else []
+        recipes = search_recipes("", limit=12, dietary_prefs=dietary, cooking_prefs=cooking)
 
     for r in recipes:
         get_unique_recipe_image_data(r.get('recipe_title', 'recipe'))
