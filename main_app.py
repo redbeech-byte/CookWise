@@ -93,77 +93,84 @@ def auth_screen():
 def main():
     initialize_state()
 
-    # Routing based on authentication
     if not st.session_state.get('authenticated'):
-        # Force a unique container for auth to prevent squashing into the app layout later
-        with st.container(key="auth_container"):
-            auth_screen()
+        auth_screen()
         return
 
-    # --- MAIN APP LAYOUT ---
-    # Wrap the entire authenticated app in a container with a stable key
-    with st.container(key="app_main_layout"):
-        # --- TOP TAB NAVIGATION ---
-        with st.container(key="navigation_bar"):
-            _, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
-            
-            with home_button:
-                btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
-                st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home")
+    # --- TOP TAB NAVIGATION ---
+    _, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
 
-            with search_button:
-                btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
-                st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",), key="nav_search")
+    with home_button:
+        btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
+        st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home")
 
-            with scan_button:
-                btn_type = "primary" if st.session_state.current_page == "Scan" else "secondary"
-                st.button("FridgeScan", width='stretch', type=btn_type, on_click=switch_page, args=("Scan",), key="nav_scan")
+    with search_button:
+        btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
+        st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",), key="nav_search")
 
-            with goback_button:
-                st.button("⬅️", width='stretch', help="Go Back", on_click=go_back, key="nav_back")
+    with scan_button:
+        btn_type = "primary" if st.session_state.current_page == "Scan" else "secondary"
+        st.button("FridgeScan", width='stretch', type=btn_type, on_click=switch_page, args=("Scan",), key="nav_scan")
 
-            with profile_btn:
-                btn_type = "primary" if st.session_state.current_page == "Profile" else "secondary"
-                st.button(f"👤 Profile", width='stretch', type=btn_type, on_click=switch_page, args=("Profile",), key="nav_profile")
+    with goback_button:
+        st.button("⬅️", width='stretch', help="Go Back", on_click=go_back, key="nav_back")
 
-            with logout_btn:
-                def do_logout():
-                    logout()
-                st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=do_logout, key="nav_logout")
+    with profile_btn:
+        btn_type = "primary" if st.session_state.current_page == "Profile" else "secondary"
+        st.button(f"👤 Profile", width='stretch', type=btn_type, on_click=switch_page, args=("Profile",), key="nav_profile")
 
-        st.divider()
+    with logout_btn:
+        def do_logout():
+            logout()
+        st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=do_logout, key="nav_logout")
 
-        # --- PAGE CONTENT & ROUTING ---
-        curr = st.session_state.current_page
-        
-        # Deterministic title for the current page
+    st.divider()
+
+    # --- PAGE CONTENT (double-buffered) ---
+    # Two st.empty() slots at distinct script positions. We alternate which
+    # one renders the active page on every navigation. The old page is still
+    # in (say) slot_a while the new page paints into slot_b — physically
+    # different positions in the element tree, so Streamlit's diff cannot
+    # match dissimilar layouts and reparent leftover children. After painting
+    # the active slot, we explicitly empty the inactive one so the previous
+    # render is fully evicted from the DOM.
+    slot_a = st.empty()
+    slot_b = st.empty()
+
+    curr = st.session_state.current_page
+    if st.session_state.get('_last_rendered_page') != curr:
+        # Flip the active slot on every page change
+        st.session_state._active_slot = 1 - st.session_state.get('_active_slot', 0)
+        st.session_state._last_rendered_page = curr
+
+    active_idx = st.session_state.get('_active_slot', 0)
+    active_slot = slot_a if active_idx == 0 else slot_b
+    inactive_slot = slot_b if active_idx == 0 else slot_a
+
+    inactive_slot.empty()
+
+    with active_slot.container():
         title_text = PAGE_TITLES.get(curr, lambda: curr)()
-        
-        # KEYED CONTAINER: This is the critical fix for ghosting. 
-        # By including 'curr' in the key, Streamlit is forced to destroy the old container 
-        # and create a new one every time the page changes.
-        with st.container(key=f"page_content_{curr}"):
-            st.title(title_text)
+        st.title(title_text)
 
-            # Routing
-            if curr == "Home":
-                from views import home
-                home.show()
-            elif curr == "Search":
-                from views import search
-                search.show()
-            elif curr == "Scan":
-                from views import scan
-                scan.show()
-            elif curr == "Recipe Details":
-                from views import recipe_details
-                recipe_details.show()
-            elif curr == "Profile":
-                from views import profile
-                profile.show()
-            elif curr == "Guide":
-                from views import guide
-                guide.show()
+        if curr == "Home":
+            from views import home
+            home.show()
+        elif curr == "Search":
+            from views import search
+            search.show()
+        elif curr == "Scan":
+            from views import scan
+            scan.show()
+        elif curr == "Recipe Details":
+            from views import recipe_details
+            recipe_details.show()
+        elif curr == "Profile":
+            from views import profile
+            profile.show()
+        elif curr == "Guide":
+            from views import guide
+            guide.show()
 
 if __name__ == "__main__":
     main()

@@ -46,7 +46,7 @@ def show():
         st.write(f"**Description:** {recipe.get('description', '')}")
         st.write(f"⏱️ **Prep time:** {recipe.get('est_prep_time_min', 0)} mins | **Cook time:** {recipe.get('est_cook_time_min', 0)} mins")
         
-        st.write("")
+        st.
         st.button(
             "🧑‍🍳 Start Interactive Cooking Guide", 
             type="primary", 
