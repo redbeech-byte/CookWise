@@ -84,7 +84,7 @@ def show():
                 st.warning("Nutrition data momentarily unavailable (API Quota Reached).")
             
             fig = draw_nutrition_radar(nut_info["totals"], projected_recipe_nutrition=recipe_nut)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
         
         with ingredients_col:
             st.subheader("Ingredients")

@@ -177,6 +177,8 @@ def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
             radialaxis=dict(visible=True, range=[0, max(120, max_val * 1.2)])
         ),
         showlegend=True,
-        margin=dict(l=40, r=40, t=40, b=40)
+        margin=dict(l=40, r=40, t=40, b=40),
+        dragmode=False, # Disable dragging/zooming
+        hovermode=False  # Disable hover labels
     )
     return fig

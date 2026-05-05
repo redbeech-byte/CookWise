@@ -81,7 +81,7 @@ def show():
             # Pass user_id for caching
             nut_info = get_past_7_days_nutrition(user_id)
             fig = draw_nutrition_radar(nut_info["totals"])
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
     recipes = get_recommended_recipes(limit=12)
     if not recipes:
