@@ -133,30 +133,46 @@ def call_gemini_nutrition_api(prompt, api_key):
 @st.cache_data(ttl=300)
 def get_past_7_days_nutrition(user_id):
     """
-    Calculates the DAILY AVERAGE based on the last 7 days of cooking.
+    Calculates a 'Representative Daily Quality' based on tracked meals.
+    Logic: (Total Nut / Total Meals) * Expected Meals Per Day
     """
+    # 1. Fetch user's expected meal count (default 3)
+    expected_meals = 3
+    try:
+        from helpers.supabase_client import get_profile
+        profile = get_profile()
+        if profile:
+            expected_meals = profile.get("expected_meals_per_day") or 3
+    except Exception:
+        pass
+
+    # 2. Fetch history
     seven_days_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
     res = supabase.table("cooked_recipes").select("recipe_id").eq("user_id", user_id).gte("cooked_at", seven_days_ago).execute()
     
     cooked_recipes = res.data or []
     count = len(cooked_recipes)
     
+    if count == 0:
+        return {"count": 0, "totals": {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}}
+
+    # 3. Sum everything
     totals = {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
     for item in cooked_recipes:
         nut = get_recipe_nutrition(item["recipe_id"])
         if nut:
             for k in totals:
-                # Add to weekly bucket, then we will divide by 7 to get daily average
                 totals[k] += nut.get(k, 0)
                 
-    # Finalize daily average
-    daily_avg = {k: v / 7.0 for k, v in totals.items()}
-    return {"count": count, "totals": daily_avg}
+    # 4. Calculate quality (average per meal scaled to a full day)
+    # This answer: "If I ate like this all day (N times), here is where I'd land."
+    daily_quality = {k: (v / float(count)) * expected_meals for k, v in totals.items()}
+    
+    return {"count": count, "expected_meals": expected_meals, "totals": daily_quality}
 
 def draw_nutrition_radar(daily_avg, current_recipe_nut=None):
     """
-    Visualizes the Daily Average vs. WHO Target.
-    If a recipe is provided, it shows the NEW predicted weekly average.
+    Visualizes the Representative Quality vs. WHO Target.
     """
     categories = ['Proteins', 'Carbs', 'Sugar', 'Vitamins', 'Salt', 'Fats']
     cats_loop = categories + [categories[0]]
@@ -175,24 +191,30 @@ def draw_nutrition_radar(daily_avg, current_recipe_nut=None):
         line=dict(color='rgba(0,0,255,0.5)', dash='dash', width=2)
     ))
     
-    # Current Average
+    # Current Quality
     fig.add_trace(go.Scatterpolar(
-        r=actual_vals, theta=cats_loop, fill='toself', name='Your Daily Avg (Past 7 Days)',
+        r=actual_vals, theta=cats_loop, fill='toself', name='Typical Daily Quality',
         line=dict(color='red', width=2), fillcolor='rgba(255,0,0,0.2)'
     ))
     
-    # Projected NEW Average (Mathematically consistent)
+    # Projected Quality (New Average)
     if current_recipe_nut:
+        # Get count/expected from session or fresh (simplifying for visual impact)
+        # We calculate the NEW average quality if this meal replaces the 'worst' or is added to a set.
+        # Most intuitive: show how THIS SPECIFIC meal compares to the average.
         proj_vals = []
         for c in categories:
-            # We add the new meal and divide by 7 to see how it moves the needle
-            new_avg = daily_avg.get(c, 0) + (current_recipe_nut.get(c, 0) / 7.0)
-            proj_vals.append(new_avg)
+            # Shift the average towards this new meal's quality
+            # This shows the potential 'pull' of this recipe on your stats.
+            recipe_val = current_recipe_nut.get(c, 0)
+            # If expected_meals = 3, one meal's quality is recipe_val * 3
+            recipe_quality = recipe_val * 3 
+            proj_vals.append(recipe_quality)
         proj_vals.append(proj_vals[0])
         
         fig.add_trace(go.Scatterpolar(
-            r=proj_vals, theta=cats_loop, fill='toself', name='Projected New Avg',
-            line=dict(color='green', dash='dot', width=2), fillcolor='rgba(0,255,0,0.1)'
+            r=proj_vals, theta=cats_loop, fill='none', name='Quality of This Recipe',
+            line=dict(color='green', dash='dot', width=2)
         ))
         
     max_val = max(actual_vals)

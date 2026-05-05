@@ -80,7 +80,12 @@ def show():
         
         curr_rest = profile.get("dietary_restrictions") or []
         curr_pref = profile.get("cooking_preferences") or []
+        curr_meals = profile.get("expected_meals_per_day") or 3
         
+        st.write("#### Normal Meals Per Day")
+        st.write("Used to calculate your daily nutritional coverage.")
+        selected_meals = st.slider("How many meals do you usually cook/eat per day?", min_value=1, max_value=5, value=int(curr_meals))
+
         st.write("#### Restrictions")
         selected_restrictions = []
         rest_cols = st.columns(4)
@@ -100,7 +105,7 @@ def show():
                     
         st.write("")
         def save_prefs():
-            update_profile(selected_restrictions, selected_preferences)
+            update_profile(selected_restrictions, selected_preferences, selected_meals)
             st.toast("Preferences updated!")
             
         st.button("💾 Save Preferences", type="primary", on_click=save_prefs)

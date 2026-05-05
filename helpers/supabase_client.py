@@ -71,12 +71,13 @@ def get_profile():
             
     return res.data[0] if res.data else None
 
-def update_profile(dietary_restrictions, cooking_preferences):
+def update_profile(dietary_restrictions, cooking_preferences, expected_meals_per_day=3):
     user = get_current_user()
     if user and getattr(user, 'user', None):
         supabase.table("user_profiles").update({
             "dietary_restrictions": dietary_restrictions,
-            "cooking_preferences": cooking_preferences
+            "cooking_preferences": cooking_preferences,
+            "expected_meals_per_day": expected_meals_per_day
         }).eq("id", user.user.id).execute()
 
 def save_recipe(recipe_id):
