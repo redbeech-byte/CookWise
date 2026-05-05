@@ -56,12 +56,13 @@ def show():
                                 col_v, col_r = st.columns(2)
                                 with col_v:
                                     st.button(
-                                        "👨‍🍳 View", 
+                                        "View Recipe", 
                                         key=f"view_save_{r['_item_id']}", 
                                         use_container_width=True,
                                         on_click=switch_page,
                                         args=("Recipe Details", rid)
                                     )
+
                                 with col_r:
                                     st.button(
                                         "❌ Remove", 
@@ -136,12 +137,13 @@ def show():
                                 st.write(f"✅ Cooked: {r['_cooked_at'][:10]}")
                                 st.write("")
                                 st.button(
-                                    "👨‍🍳 View Recipe", 
+                                    "View Recipe", 
                                     key=f"view_cook_{r['_item_id']}", 
                                     use_container_width=True,
                                     on_click=switch_page,
                                     args=("Recipe Details", rid)
                                 )
+
         else:
             st.info("No recipes marked as cooked yet.")
             

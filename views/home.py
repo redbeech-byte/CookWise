@@ -126,7 +126,7 @@ def show():
                     st.write("")
                     
                     st.button(
-                        "👨‍🍳 Cook", 
+                        "View Recipe", 
                         key=f"btn_{rid}", 
                         use_container_width=True,
                         on_click=switch_page,

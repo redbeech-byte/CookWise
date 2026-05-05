@@ -85,7 +85,7 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
                                 st.write(f"⏱️ {recipe.get('est_prep_time_min', 0)} mins (Matches: {recipe.get('match_count', 0)})")
                                 st.write("")
                                 st.button(
-                                    "👨‍🍳 Cook", 
+                                    "View Recipe", 
                                     key=f"upload_btn_{recipe['recipe_id']}", 
                                     use_container_width=True,
                                     on_click=switch_page,
