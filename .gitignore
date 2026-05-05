@@ -1,5 +1,9 @@
-# Streamlit config (Allow secrets.toml for public keys)
-.streamlit/config.toml
+# Streamlit config (Committing config for shared UI, ignoring secrets)
+.streamlit/secrets.toml
+
+# Local environment
+venv/
+.env
 
 # Local data and databases
 data/
