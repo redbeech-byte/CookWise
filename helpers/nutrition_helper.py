@@ -63,8 +63,10 @@ def get_recipe_nutrition(recipe_id):
     Do not include any other text, reasoning, or markdown.
     """
     
+    # Use Primary Key
     success, result_text, error_msg = call_gemini_nutrition_api(prompt, GEMINI_API_KEY_PRIMARY)
     
+    # Fallback to Secondary Key
     if not success and GEMINI_API_KEY_SECONDARY:
         success, result_text, error_msg = call_gemini_nutrition_api(prompt, GEMINI_API_KEY_SECONDARY)
 
@@ -72,6 +74,7 @@ def get_recipe_nutrition(recipe_id):
         print(f"Error evaluating nutrition: {error_msg}")
         return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
 
+    # Extract JSON robustly
     json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
     if json_match:
         result_text = json_match.group(0)
@@ -91,6 +94,7 @@ def get_recipe_nutrition(recipe_id):
         return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
 
 def call_gemini_nutrition_api(prompt, api_key):
+    """Makes a request to the Gemini API using gemini-2.5-flash-lite."""
     try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"
         payload = {

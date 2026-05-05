@@ -11,6 +11,7 @@ from pathlib import Path
 from helpers.db import search_recipes_by_ingredients
 from helpers.switch_page import switch_page
 from helpers.image_helper import display_recipe_image
+from helpers.nutrition_helper import get_recipe_nutrition
 
 # Load API keys
 GEMINI_API_KEY_PRIMARY = st.secrets["GEMINI_API_KEY"]
@@ -28,7 +29,11 @@ def show_title():
 def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=None):
     if st.session_state.get("last_image_hash") != img_hash:
         with st.spinner("Analyzing ingredients using Gemini 2.5 Flash..."):
+            
+            # Primary attempt
             success, result_text, error_msg = call_gemini_api(image_bytes, mime_type, GEMINI_API_KEY_PRIMARY)
+            
+            # Secondary fallback if primary fails (e.g. 429 Limit reached)
             if not success and GEMINI_API_KEY_SECONDARY:
                 st.info("🔄 Primary API key limit reached, switching to secondary key...")
                 success, result_text, error_msg = call_gemini_api(image_bytes, mime_type, GEMINI_API_KEY_SECONDARY)
@@ -37,6 +42,7 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
                 st.error(f"Error communicating with Gemini API: {error_msg}")
                 return
 
+            # Extract and parse JSON
             json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
             if json_match:
                 result_text = json_match.group(0)
@@ -54,6 +60,7 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
     
     if ingredients_list:
         st.success(f"**Identified Ingredients:** {', '.join(ingredients_list)}")
+        
         recipes = search_recipes_by_ingredients(ingredients_list, limit=12)
         
         if recipes:
@@ -71,6 +78,10 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
                                 if len(title) > 55:
                                     title = title[:52] + "..."
                                 st.write(f"**{title}**")
+                                
+                                # Show nutrition data if available
+                                get_recipe_nutrition(recipe['recipe_id'])
+                                
                                 st.write(f"⏱️ {recipe.get('est_prep_time_min', 0)} mins (Matches: {recipe.get('match_count', 0)})")
                                 st.write("")
                                 st.button(
@@ -84,9 +95,11 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
             st.warning("No recipes found matching these ingredients.")
 
 def call_gemini_api(image_bytes, mime_type, api_key):
+    """Encapsulated API call logic for primary/secondary retry."""
     try:
         encoded_image = base64.b64encode(image_bytes).decode("utf-8")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        
         payload = {
             "contents": [{
                 "parts": [
@@ -103,14 +116,18 @@ def call_gemini_api(image_bytes, mime_type, api_key):
                 "response_mime_type": "application/json"
             }
         }
+        
         response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
+        
         result = response.json()
         candidates = result.get('candidates', [])
         if not candidates:
             return False, "", "No candidates returned from model."
+            
         content_text = candidates[0].get('content', {}).get('parts', [])[0].get('text', '')
         return True, content_text, ""
+        
     except Exception as e:
         return False, "", str(e)
 
@@ -174,6 +191,8 @@ def show():
             trigger_time = 0
             if TRIGGER_FLAG.exists():
                 trigger_time = TRIGGER_FLAG.stat().st_mtime
+            
+            # Wait for capture path to be updated since trigger
             if CAPTURE_PATH.exists() and CAPTURE_PATH.stat().st_mtime >= trigger_time:
                 st.session_state["cam_state"] = "idle"
                 READY_FLAG.unlink(missing_ok=True)

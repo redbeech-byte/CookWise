@@ -121,7 +121,9 @@ def main():
             st.button(f"👤 Profile", width='stretch', type=btn_type, on_click=switch_page, args=("Profile",), key="nav_profile")
 
         with logout_btn:
-            st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=logout, key="nav_logout")
+            def do_logout():
+                logout()
+            st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=do_logout, key="nav_logout")
 
     st.divider()
 

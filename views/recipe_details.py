@@ -26,12 +26,12 @@ def show():
     picture_col, details_col = st.columns(2)
     
     with picture_col:
-        st.space("small")
+        st.write("") # Spacer
         display_recipe_image(recipe_title, key_suffix=f"details_{recipe_id}")
 
     with details_col:
         st.title(recipe_title)
-        st.space("small")
+        st.write("") # Spacer
         st.write(f"**Description:** {recipe.get('description', '')}")
         st.write(f"⏱️ **Prep time:** {recipe.get('est_prep_time_min', 0)} mins | **Cook time:** {recipe.get('est_cook_time_min', 0)} mins")
         
@@ -72,9 +72,15 @@ def show():
             nut_cache_key = f"nut_data_{recipe_id}"
             if nut_cache_key not in st.session_state:
                 with st.spinner("Analyzing nutrition..."):
-                    st.session_state[nut_cache_key] = get_recipe_nutrition(recipe_id)
+                    recipe_nut = get_recipe_nutrition(recipe_id)
+                    st.session_state[nut_cache_key] = recipe_nut
             
             recipe_nut = st.session_state[nut_cache_key]
+            
+            # If everything is 0, it means API quota was hit
+            if not recipe_nut or all(v == 0 for v in recipe_nut.values()):
+                st.warning("Nutrition data momentarily unavailable (API Quota Reached).")
+            
             # Pass user_id for caching
             nut_info = get_past_7_days_nutrition(user_id)
             fig = draw_nutrition_radar(nut_info["totals"], projected_recipe_nutrition=recipe_nut)

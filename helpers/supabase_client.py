@@ -30,6 +30,7 @@ def logout():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.cache_data.clear()
+    
     return supabase.auth.sign_out()
     
 def update_password(new_password):

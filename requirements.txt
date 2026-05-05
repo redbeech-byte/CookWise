@@ -5,6 +5,7 @@ pandas
 numpy
 supabase
 requests
+pyobjc
 pyobjc-core
 pyobjc-framework-AVFoundation
 pyobjc-framework-Quartz
