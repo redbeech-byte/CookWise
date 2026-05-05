@@ -4,7 +4,7 @@ from helpers.db import get_recipe_by_id, get_ingredients_for_recipe
 from helpers.switch_page import switch_page
 from helpers.image_helper import display_recipe_image
 from helpers.supabase_client import mark_recipe_seen, save_recipe, mark_recipe_cooked
-from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar, get_recipe_nutrition
+from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar, get_recipe_nutrition, get_todays_nutrition
 
 def show_title():
     return "Cooking Time!"
