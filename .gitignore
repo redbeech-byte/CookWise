@@ -1,5 +1,5 @@
-# Streamlit config (Committing config for shared UI, ignoring secrets)
-.streamlit/secrets.toml
+# Streamlit config (Committing config and public secrets for zero-setup)
+# Machine-specific overrides can be added here if needed
 
 # Local environment
 venv/
