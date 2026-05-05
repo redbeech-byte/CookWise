@@ -130,6 +130,25 @@ def call_gemini_nutrition_api(prompt, api_key):
     except Exception as e:
         return False, "", str(e)
 
+@st.cache_data(ttl=60) # Short cache for today's stats
+def get_todays_nutrition(user_id):
+    """
+    Calculates the ACTUAL sum of nutrition for meals cooked strictly TODAY.
+    """
+    today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    res = supabase.table("cooked_recipes").select("recipe_id").eq("user_id", user_id).gte("cooked_at", today_start).execute()
+    
+    cooked_recipes = res.data or []
+    totals = {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
+    
+    for item in cooked_recipes:
+        nut = get_recipe_nutrition(item["recipe_id"])
+        if nut:
+            for k in totals:
+                totals[k] += nut.get(k, 0)
+                
+    return {"count": len(cooked_recipes), "totals": totals}
+
 @st.cache_data(ttl=300)
 def get_past_7_days_nutrition(user_id):
     """
@@ -165,14 +184,16 @@ def get_past_7_days_nutrition(user_id):
                 totals[k] += nut.get(k, 0)
                 
     # 4. Calculate quality (average per meal scaled to a full day)
-    # This answer: "If I ate like this all day (N times), here is where I'd land."
     daily_quality = {k: (v / float(count)) * expected_meals for k, v in totals.items()}
     
     return {"count": count, "expected_meals": expected_meals, "totals": daily_quality}
 
-def draw_nutrition_radar(daily_avg, current_recipe_nut=None):
+def draw_nutrition_radar(today_stats, average_stats=None, projected_recipe_nut=None):
     """
-    Visualizes the Representative Quality vs. WHO Target.
+    Advanced NutriRadar with context-aware layers.
+    - today_stats: Actual intake today (Red Area)
+    - average_stats: Historical quality (Blue Dashed Line)
+    - projected_recipe_nut: Potential impact (Green Line)
     """
     categories = ['Proteins', 'Carbs', 'Sugar', 'Vitamins', 'Salt', 'Fats']
     cats_loop = categories + [categories[0]]
@@ -180,50 +201,51 @@ def draw_nutrition_radar(daily_avg, current_recipe_nut=None):
     def to_list(d):
         return [d.get(c, 0) for c in categories] + [d.get(categories[0], 0)]
         
-    actual_vals = to_list(daily_avg)
-    target_vals = [100] * 7
-    
     fig = go.Figure()
     
-    # Target Line
+    # 1. Target Line (Reference 100%)
+    target_vals = [100] * 7
     fig.add_trace(go.Scatterpolar(
         r=target_vals, theta=cats_loop, fill='none', name='Daily Target (100%)',
-        line=dict(color='rgba(0,0,255,0.5)', dash='dash', width=2)
+        line=dict(color='rgba(150,150,150,0.5)', dash='dot', width=1)
     ))
     
-    # Current Quality
+    # 2. Historical Average (If provided - usually for Home)
+    if average_stats:
+        avg_vals = to_list(average_stats)
+        fig.add_trace(go.Scatterpolar(
+            r=avg_vals, theta=cats_loop, fill='none', name='Typical Daily Quality',
+            line=dict(color='rgba(0,0,255,0.6)', dash='dash', width=2)
+        ))
+
+    # 3. Today's Actual Progress (Always shown)
+    today_vals = to_list(today_stats)
     fig.add_trace(go.Scatterpolar(
-        r=actual_vals, theta=cats_loop, fill='toself', name='Typical Daily Quality',
+        r=today_vals, theta=cats_loop, fill='toself', name="Today's Intake",
         line=dict(color='red', width=2), fillcolor='rgba(255,0,0,0.2)'
     ))
     
-    # Projected Quality (New Average)
-    if current_recipe_nut:
-        # Get count/expected from session or fresh (simplifying for visual impact)
-        # We calculate the NEW average quality if this meal replaces the 'worst' or is added to a set.
-        # Most intuitive: show how THIS SPECIFIC meal compares to the average.
+    # 4. Projected Intake (If provided - usually for Recipe Details)
+    if projected_recipe_nut:
         proj_vals = []
-        for c in categories:
-            # Shift the average towards this new meal's quality
-            # This shows the potential 'pull' of this recipe on your stats.
-            recipe_val = current_recipe_nut.get(c, 0)
-            # If expected_meals = 3, one meal's quality is recipe_val * 3
-            recipe_quality = recipe_val * 3 
-            proj_vals.append(recipe_quality)
+        for i, c in enumerate(categories):
+            proj_vals.append(today_vals[i] + projected_recipe_nut.get(c, 0))
         proj_vals.append(proj_vals[0])
         
         fig.add_trace(go.Scatterpolar(
-            r=proj_vals, theta=cats_loop, fill='none', name='Quality of This Recipe',
-            line=dict(color='green', dash='dot', width=2)
+            r=proj_vals, theta=cats_loop, fill='none', name='Today + This Meal',
+            line=dict(color='green', dash='solid', width=3)
         ))
         
-    max_val = max(actual_vals)
-    if current_recipe_nut:
-        max_val = max(max_val, max(proj_vals))
-
+    # Calculate max for axis range
+    all_vals = today_vals + target_vals
+    if average_stats: all_vals += to_list(average_stats)
+    if projected_recipe_nut: all_vals += proj_vals
+    
+    max_val = max(all_vals)
     fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, max(120, max_val * 1.2)])),
-        showlegend=True, margin=dict(l=40, r=40, t=40, b=40),
+        polar=dict(radialaxis=dict(visible=True, range=[0, max(120, max_val * 1.1)])),
+        showlegend=True, margin=dict(l=60, r=60, t=40, b=40),
         dragmode=False, hovermode=False
     )
     return fig

@@ -6,7 +6,7 @@ from helpers.db import search_recipes, get_recipe_by_id
 from helpers.image_helper import display_recipe_image, get_unique_recipe_image_data
 from helpers.supabase_client import get_cooked_recipes, mark_recipe_seen
 from helpers.recommendation_helper import get_recommended_recipes
-from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar
+from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar, get_todays_nutrition
 
 def show_title():
     return "Home"
@@ -17,8 +17,10 @@ def show():
     # PRE-FETCH DATA with a single spinner
     with st.spinner("Loading your kitchen..."):
         cooked_recipes = get_cooked_recipes()
-        # Pass user_id for caching
-        nut_info = get_past_7_days_nutrition(user_id)
+        # 7-day representative quality
+        avg_info = get_past_7_days_nutrition(user_id)
+        # Actual progress strictly today
+        today_info = get_todays_nutrition(user_id)
     
     current_guide_id = st.session_state.get("current_recipe_guide")
 
@@ -78,9 +80,10 @@ def show():
     with graph:
         st.subheader("Your NutriRadar")
         with st.container(border=True):
-            # Pass user_id for caching
-            nut_info = get_past_7_days_nutrition(user_id)
-            fig = draw_nutrition_radar(nut_info["totals"])
+            fig = draw_nutrition_radar(
+                today_stats=today_info["totals"],
+                average_stats=avg_info["totals"]
+            )
             st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
     recipes = get_recommended_recipes(limit=12)

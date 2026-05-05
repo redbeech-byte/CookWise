@@ -30,7 +30,8 @@ def show():
             st.session_state[nut_cache_key] = get_recipe_nutrition(recipe_id)
         
         recipe_nut = st.session_state[nut_cache_key]
-        nut_info = get_past_7_days_nutrition(user_id)
+        # New layers: today's actual vs. projected impact
+        today_info = get_todays_nutrition(user_id)
 
     recipe_title = recipe.get("recipe_title", "Unknown Recipe")
 
@@ -83,7 +84,10 @@ def show():
             if not recipe_nut or all(v == 0 for v in recipe_nut.values()):
                 st.warning("Nutrition data momentarily unavailable (API Quota Reached).")
             
-            fig = draw_nutrition_radar(nut_info["totals"], projected_recipe_nutrition=recipe_nut)
+            fig = draw_nutrition_radar(
+                today_stats=today_info["totals"], 
+                projected_recipe_nut=recipe_nut
+            )
             st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
         
         with ingredients_col:
