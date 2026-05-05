@@ -1,80 +1,97 @@
 import streamlit as st
-import sqlite3
 import json
 import re
 import requests
 import plotly.graph_objects as go
-from helpers.db import DB_PATH, get_recipe_by_id, get_ingredients_for_recipe
-from helpers.supabase_client import supabase, get_current_user
 import datetime
+from helpers.db import get_recipe_by_id, get_ingredients_for_recipe
+from helpers.supabase_client import supabase, get_current_user
 
 # Primary and Secondary API Keys from st.secrets
 GEMINI_API_KEY_PRIMARY = st.secrets["GEMINI_API_KEY"]
 GEMINI_API_KEY_SECONDARY = st.secrets.get("GEMINI_API_KEY_SECONDARY")
 
-def get_db_connection():
-    return sqlite3.connect(DB_PATH)
-
-def init_nutrition_table():
-    with get_db_connection() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS recipe_nutrition (
-                recipe_id TEXT PRIMARY KEY,
-                proteins REAL,
-                carbs REAL,
-                sugar REAL,
-                vitamins REAL,
-                salt REAL,
-                fats REAL
-            )
-        """)
+# Standardized WHO Reference Values for an average adult (2000 kcal)
+WHO_REFERENCES = {
+    "Proteins": "50g",
+    "Carbs": "275g",
+    "Sugar": "50g",
+    "Vitamins": "Daily RDA Mix",
+    "Salt": "5g",
+    "Fats": "78g"
+}
 
 def get_recipe_nutrition(recipe_id):
+    """
+    Retrieves or generates standardized nutritional data for a recipe.
+    Data is stored on Supabase for cross-user consistency.
+    """
     recipe_id = str(recipe_id)
-    init_nutrition_table()
-    with get_db_connection() as conn:
-        res = conn.execute("SELECT proteins, carbs, sugar, vitamins, salt, fats FROM recipe_nutrition WHERE recipe_id = ?", (recipe_id,)).fetchone()
-        if res:
-            return {"Proteins": res[0], "Carbs": res[1], "Sugar": res[2], "Vitamins": res[3], "Salt": res[4], "Fats": res[5]}
+    
+    # 1. Try to fetch from Supabase (Central Cache)
+    try:
+        res = supabase.table("recipe_nutrition").select("*").eq("recipe_id", recipe_id).execute()
+        if res.data:
+            d = res.data[0]
+            return {
+                "Proteins": d["proteins"], 
+                "Carbs": d["carbs"], 
+                "Sugar": d["sugar"], 
+                "Vitamins": d["vitamins"], 
+                "Salt": d["salt"], 
+                "Fats": d["fats"]
+            }
+    except Exception as e:
+        print(f"Supabase fetch error: {e}")
 
-    # Not found, generate using Gemini
+    # 2. Not found, generate using Gemini with the "Hardened Concept"
     recipe = get_recipe_by_id(recipe_id)
     if not recipe:
         return None
+        
     ingredients = get_ingredients_for_recipe(recipe_id)
-    
     ingredients_text = ", ".join([ing.get("original_string", "") for ing in ingredients])
     title = recipe.get("recipe_title", "")
     
+    # NEW CONCEPT: Explicit anchor points and forced portion math
     prompt = f"""
-    You are an expert nutritionist. Estimate the nutritional value for 1 portion of the following recipe:
-    Title: {title}
-    Ingredients: {ingredients_text}
+    You are a clinical nutritionist using WHO standardized reference values.
     
-    Return ONLY a valid JSON object with these exact keys, providing the estimated percentage of the Daily Value (% DV) based on WHO guidelines for an average adult:
+    TASK: Estimate the nutritional impact of ONE TYPICAL SERVING of this recipe.
+    RECIPE: "{title}"
+    INGREDIENTS: {ingredients_text}
+    
+    REFERENCE DAILY VALUES (100%):
+    - Protein: 50g
+    - Carbs: 275g
+    - Sugar: 50g (Added sugars)
+    - Salt: 5g
+    - Fats: 70g
+    
+    CALCULATION RULES:
+    1. If the recipe serves multiple people, you MUST divide the totals to get ONE portion.
+    2. Be realistic. A salad is rarely 50% protein. A pasta dish is likely 30-50% carbs.
+    3. Return ONLY a JSON object.
+    
+    JSON FORMAT:
     {{
-        "Proteins": <float>,
-        "Carbs": <float>,
-        "Sugar": <float>,
-        "Vitamins": <float>,
-        "Salt": <float>,
-        "Fats": <float>
+        "Proteins": <float, % of 50g>,
+        "Carbs": <float, % of 275g>,
+        "Sugar": <float, % of 50g>,
+        "Vitamins": <float, overall % of daily micronutrients>,
+        "Salt": <float, % of 5g>,
+        "Fats": <float, % of 70g>
     }}
-    Do not include any other text, reasoning, or markdown.
     """
     
-    # Use Primary Key
     success, result_text, error_msg = call_gemini_nutrition_api(prompt, GEMINI_API_KEY_PRIMARY)
-    
-    # Fallback to Secondary Key
     if not success and GEMINI_API_KEY_SECONDARY:
         success, result_text, error_msg = call_gemini_nutrition_api(prompt, GEMINI_API_KEY_SECONDARY)
 
     if not success:
-        print(f"Error evaluating nutrition: {error_msg}")
         return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
 
-    # Extract JSON robustly
+    # Extract JSON
     json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
     if json_match:
         result_text = json_match.group(0)
@@ -82,46 +99,46 @@ def get_recipe_nutrition(recipe_id):
     try:
         data = json.loads(result_text)
         
-        with get_db_connection() as conn:
-            conn.execute("""
-                INSERT INTO recipe_nutrition (recipe_id, proteins, carbs, sugar, vitamins, salt, fats)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (str(recipe_id), data.get("Proteins", 0), data.get("Carbs", 0), data.get("Sugar", 0), data.get("Vitamins", 0), data.get("Salt", 0), data.get("Fats", 0)))
+        # Save to Supabase for future use
+        supabase.table("recipe_nutrition").upsert({
+            "recipe_id": recipe_id,
+            "proteins": data.get("Proteins", 0),
+            "carbs": data.get("Carbs", 0),
+            "sugar": data.get("Sugar", 0),
+            "vitamins": data.get("Vitamins", 0),
+            "salt": data.get("Salt", 0),
+            "fats": data.get("Fats", 0)
+        }).execute()
         
         return data
     except Exception as e:
-        print(f"Error parsing nutrition JSON: {e}")
+        print(f"Error processing nutrition: {e}")
         return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
 
 def call_gemini_nutrition_api(prompt, api_key):
-    """Makes a request to the Gemini API using gemini-2.5-flash-lite."""
     try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "response_mime_type": "application/json"
-            }
+            "generationConfig": { "response_mime_type": "application/json" }
         }
         response = requests.post(url, json=payload, timeout=20)
         response.raise_for_status()
-        
         res_json = response.json()
-        candidates = res_json.get('candidates', [])
-        if not candidates:
-            return False, "", "No candidates"
-            
-        text = candidates[0].get('content', {}).get('parts', [])[0].get('text', '')
+        text = res_json.get('candidates', [])[0].get('content', {}).get('parts', [])[0].get('text', '')
         return True, text, ""
     except Exception as e:
         return False, "", str(e)
 
-@st.cache_data(ttl=300) # Cache weekly stats for 5 mins
+@st.cache_data(ttl=300)
 def get_past_7_days_nutrition(user_id):
+    """
+    Calculates the DAILY AVERAGE based on the last 7 days of cooking.
+    """
     seven_days_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
     res = supabase.table("cooked_recipes").select("recipe_id").eq("user_id", user_id).gte("cooked_at", seven_days_ago).execute()
     
-    cooked_recipes = res.data
+    cooked_recipes = res.data or []
     count = len(cooked_recipes)
     
     totals = {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
@@ -129,56 +146,62 @@ def get_past_7_days_nutrition(user_id):
         nut = get_recipe_nutrition(item["recipe_id"])
         if nut:
             for k in totals:
-                totals[k] += (nut.get(k, 0) / 7.0)
+                # Add to weekly bucket, then we will divide by 7 to get daily average
+                totals[k] += nut.get(k, 0)
                 
-    return {"count": count, "totals": totals}
+    # Finalize daily average
+    daily_avg = {k: v / 7.0 for k, v in totals.items()}
+    return {"count": count, "totals": daily_avg}
 
-def draw_nutrition_radar(totals, projected_recipe_nutrition=None):
+def draw_nutrition_radar(daily_avg, current_recipe_nut=None):
+    """
+    Visualizes the Daily Average vs. WHO Target.
+    If a recipe is provided, it shows the NEW predicted weekly average.
+    """
     categories = ['Proteins', 'Carbs', 'Sugar', 'Vitamins', 'Salt', 'Fats']
     cats_loop = categories + [categories[0]]
     
     def to_list(d):
         return [d.get(c, 0) for c in categories] + [d.get(categories[0], 0)]
         
-    actual_vals = to_list(totals)
+    actual_vals = to_list(daily_avg)
     target_vals = [100] * 7
     
     fig = go.Figure()
+    
+    # Target Line
     fig.add_trace(go.Scatterpolar(
-        r=target_vals,
-        theta=cats_loop,
-        fill='none',
-        name='Daily Target (100%)',
-        line=dict(color='blue', dash='dash', width=2)
+        r=target_vals, theta=cats_loop, fill='none', name='Daily Target (100%)',
+        line=dict(color='rgba(0,0,255,0.5)', dash='dash', width=2)
     ))
+    
+    # Current Average
     fig.add_trace(go.Scatterpolar(
-        r=actual_vals,
-        theta=cats_loop,
-        fill='toself',
-        name='Daily Avg (Past 7 Days)',
-        line=dict(color='red', width=2)
+        r=actual_vals, theta=cats_loop, fill='toself', name='Your Daily Avg (Past 7 Days)',
+        line=dict(color='red', width=2), fillcolor='rgba(255,0,0,0.2)'
     ))
-    if projected_recipe_nutrition:
+    
+    # Projected NEW Average (Mathematically consistent)
+    if current_recipe_nut:
         proj_vals = []
-        for i, c in enumerate(categories):
-            proj_vals.append(actual_vals[i] + projected_recipe_nutrition.get(c, 0))
+        for c in categories:
+            # We add the new meal and divide by 7 to see how it moves the needle
+            new_avg = daily_avg.get(c, 0) + (current_recipe_nut.get(c, 0) / 7.0)
+            proj_vals.append(new_avg)
         proj_vals.append(proj_vals[0])
+        
         fig.add_trace(go.Scatterpolar(
-            r=proj_vals,
-            theta=cats_loop,
-            fill='toself',
-            name='+ This Recipe',
-            line=dict(color='green', dash='dot', width=2)
+            r=proj_vals, theta=cats_loop, fill='toself', name='Projected New Avg',
+            line=dict(color='green', dash='dot', width=2), fillcolor='rgba(0,255,0,0.1)'
         ))
         
-    max_val = max(actual_vals) if not projected_recipe_nutrition else max(max(actual_vals), max(proj_vals))
+    max_val = max(actual_vals)
+    if current_recipe_nut:
+        max_val = max(max_val, max(proj_vals))
+
     fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, range=[0, max(120, max_val * 1.2)])
-        ),
-        showlegend=True,
-        margin=dict(l=40, r=40, t=40, b=40),
-        dragmode=False, # Disable dragging/zooming
-        hovermode=False  # Disable hover labels
+        polar=dict(radialaxis=dict(visible=True, range=[0, max(120, max_val * 1.2)])),
+        showlegend=True, margin=dict(l=40, r=40, t=40, b=40),
+        dragmode=False, hovermode=False
     )
     return fig
