@@ -46,14 +46,14 @@ def show():
         st.write(f"**Description:** {recipe.get('description', '')}")
         st.write(f"⏱️ **Prep time:** {recipe.get('est_prep_time_min', 0)} mins | **Cook time:** {recipe.get('est_cook_time_min', 0)} mins")
         
-        st.
+        st.write("")
         st.button(
             "🧑‍🍳 Start Interactive Cooking Guide", 
             type="primary", 
             use_container_width=True, 
-            key=f"guide_{recipe_id}",
+            key=f"guide_btn_{recipe_id}",
             on_click=switch_page,
-            args=("Guide", recipe_id, lambda: mark_recipe_cooked(recipe_id))
+            args=("Guide", recipe_id, lambda r=recipe_id: mark_recipe_cooked(r))
         )
             
         col_c, col_s = st.columns(2)

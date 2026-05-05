@@ -8,19 +8,22 @@ def show_title():
     return "Cooking Interactive Guide"
 
 def show():
+    # Use .get() defensively and check for None/empty
     recipe_id = st.session_state.get("selected_recipe")
-    if not recipe_id:
+    if recipe_id is None:
         st.warning("No recipe selected.")
         st.button("Go Home", on_click=switch_page, args=("Home",))
         return
         
     recipe = get_recipe_by_id(recipe_id)
     if not recipe:
-        st.error("Recipe not found.")
+        st.error(f"Recipe not found (ID: {recipe_id}).")
+        st.button("Go Home", on_click=switch_page, args=("Home",))
         return
 
-    if st.session_state.get("current_recipie_guide") != recipe_id:
-        st.session_state["current_recipie_guide"] = recipe_id
+    # Fix typo 'recipie' -> 'recipe'
+    if st.session_state.get("current_recipe_guide") != recipe_id:
+        st.session_state["current_recipe_guide"] = recipe_id
         st.session_state[f"current_step_{recipe_id}"] = 0
 
     directions_str = recipe.get("directions", "[]")
