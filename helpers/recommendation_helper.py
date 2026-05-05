@@ -33,7 +33,9 @@ def load_base_features():
                 'is_dairy_free', 'is_nut_free', 'is_halal', 'is_kosher', 'is_fast', 'is_slow'] + [f'is_{t.lower()}' for t in tastes]
     
     for f in features:
-        df[f] = pd.to_numeric(df[f], errors='coerce').fillna(0)
+        # Supabase returns actual booleans, which pandas hates subtracting. 
+        # Force everything to float.
+        df[f] = pd.to_numeric(df[f], errors='coerce').fillna(0).astype(float)
         
     # Min-max normalization
     for f in features:

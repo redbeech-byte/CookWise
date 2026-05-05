@@ -20,7 +20,8 @@ def get_vault_secrets():
     """
     try:
         res = supabase.rpc("get_secrets").execute()
-        secrets_dict = {item['name']: item['value'] for item in res.data}
+        # The RPC returns 'name' and 'secret' (which is the decrypted string from the view)
+        secrets_dict = {item['name']: item['secret'] for item in res.data}
         return secrets_dict
     except Exception as e:
         st.error(f"Failed to load secrets from Vault: {e}")
