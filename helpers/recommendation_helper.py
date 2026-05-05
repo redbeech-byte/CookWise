@@ -1,19 +1,19 @@
 import pandas as pd
 import numpy as np
 import streamlit as st
-from helpers.db import get_connection, deduplicate_recipes
-from helpers.supabase_client import get_saved_recipes, get_cooked_recipes
+from helpers.db import deduplicate_recipes
+from helpers.supabase_client import get_saved_recipes, get_cooked_recipes, supabase
 
 @st.cache_data(ttl=86400)
 def load_base_features():
-    """Loads a simplified version of the recipes table for feature matching once."""
-    conn = get_connection()
-    df = pd.read_sql("""
-        SELECT recipe_id, recipe_title, est_prep_time_min, est_cook_time_min, 
-               difficulty, is_vegan, is_vegetarian, is_gluten_free, is_dairy_free, is_nut_free, is_halal, is_kosher,
-               primary_taste, cook_speed
-        FROM recipes
-    """, conn)
+    """Loads a simplified version of the recipes table for feature matching once from Supabase."""
+    res = supabase.table("recipes").select("""
+        recipe_id, recipe_title, est_prep_time_min, est_cook_time_min, 
+        difficulty, is_vegan, is_vegetarian, is_gluten_free, is_dairy_free, is_nut_free, is_halal, is_kosher,
+        primary_taste, cook_speed
+    """).execute()
+    
+    df = pd.DataFrame(res.data or [])
     
     if df.empty:
         return df
