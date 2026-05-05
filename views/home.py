@@ -13,7 +13,13 @@ def show_title():
 
 def show():
     user_id = st.session_state.get("user_id")
-    cooked_recipes = get_cooked_recipes()
+    
+    # PRE-FETCH DATA with a single spinner
+    with st.spinner("Loading your kitchen..."):
+        cooked_recipes = get_cooked_recipes()
+        # Pass user_id for caching
+        nut_info = get_past_7_days_nutrition(user_id)
+    
     current_guide_id = st.session_state.get("current_recipie_guide")
 
     graph, spacer1, navigation, spacer2 = st.columns([4, 0.5, 2, 0.5])

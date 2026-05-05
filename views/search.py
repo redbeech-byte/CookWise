@@ -29,14 +29,15 @@ def show():
                     if st.checkbox("Dairy-Free"): dietary_prefs.append("Dairy-Free")
                     if st.checkbox("Nut-Free"): dietary_prefs.append("Nut-Free")
                     
-        results = search_recipes(
-            query=query, 
-            limit=50, 
-            max_time=max_time if max_time < 240 else None,
-            min_time=min_time if min_time > 10 else None,
-            difficulty=difficulty,
-            dietary_prefs=dietary_prefs
-        )
+        with st.spinner("Searching recipes..."):
+            results = search_recipes(
+                query=query, 
+                limit=50, 
+                max_time=max_time if max_time < 240 else None,
+                min_time=min_time if min_time > 10 else None,
+                difficulty=difficulty,
+                dietary_prefs=dietary_prefs
+            )
     
     st.subheader(f"Results ({len(results)})")
 

@@ -16,11 +16,21 @@ def show():
         st.warning("No recipe selected.")
         return
     
-    recipe = get_recipe_by_id(recipe_id)
-    if not recipe:
-        st.error("Recipe not found in the database.")
-        return
+    # PRE-FETCH DATA with a single spinner for the whole page loading experience
+    with st.spinner("Loading recipe details..."):
+        recipe = get_recipe_by_id(recipe_id)
+        if not recipe:
+            st.error("Recipe not found in the database.")
+            return
+            
+        # Ensure nutrition data is loaded
+        nut_cache_key = f"nut_data_{recipe_id}"
+        if nut_cache_key not in st.session_state:
+            st.session_state[nut_cache_key] = get_recipe_nutrition(recipe_id)
         
+        recipe_nut = st.session_state[nut_cache_key]
+        nut_info = get_past_7_days_nutrition(user_id)
+
     recipe_title = recipe.get("recipe_title", "Unknown Recipe")
 
     picture_col, details_col = st.columns(2)
@@ -67,22 +77,11 @@ def show():
         ingredients_col, nut_col = st.columns(2)
         with nut_col:
             st.subheader("Nutrition Impact (Weekly % DV)")
-            from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar, get_recipe_nutrition
-            
-            nut_cache_key = f"nut_data_{recipe_id}"
-            if nut_cache_key not in st.session_state:
-                with st.spinner("Analyzing nutrition..."):
-                    recipe_nut = get_recipe_nutrition(recipe_id)
-                    st.session_state[nut_cache_key] = recipe_nut
-            
-            recipe_nut = st.session_state[nut_cache_key]
             
             # If everything is 0, it means API quota was hit
             if not recipe_nut or all(v == 0 for v in recipe_nut.values()):
                 st.warning("Nutrition data momentarily unavailable (API Quota Reached).")
             
-            # Pass user_id for caching
-            nut_info = get_past_7_days_nutrition(user_id)
             fig = draw_nutrition_radar(nut_info["totals"], projected_recipe_nutrition=recipe_nut)
             st.plotly_chart(fig, use_container_width=True)
         
