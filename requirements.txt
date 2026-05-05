@@ -1,0 +1,10 @@
+streamlit
+google-generativeai
+plotly
+pandas
+numpy
+supabase
+requests
+pyobjc-core
+pyobjc-framework-AVFoundation
+pyobjc-framework-Quartz

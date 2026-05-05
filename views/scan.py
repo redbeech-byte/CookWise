@@ -119,6 +119,7 @@ def show():
     
     if "cam_state" not in st.session_state:
         st.session_state["cam_state"] = "idle"
+        st.session_state["cam_start_time"] = 0
         if CAPTURE_PATH.exists():
             try:
                 CAPTURE_PATH.unlink()
@@ -142,6 +143,7 @@ def show():
                 )
                 PID_FILE.write_text(str(proc.pid))
                 st.session_state["cam_state"] = "starting"
+                st.session_state["cam_start_time"] = time.time()
 
             st.button("📷 Take Photo with iPhone Camera", use_container_width=True, on_click=start_cam)
 
@@ -149,12 +151,18 @@ def show():
             if READY_FLAG.exists():
                 st.session_state["cam_state"] = "ready"
                 st.rerun()
+            elif time.time() - st.session_state.get("cam_start_time", 0) > 10:
+                st.error("Camera failed to start within 10 seconds.")
+                st.info("💡 **Troubleshooting:**\n1. Run `pip install -r requirements.txt` to install camera drivers.\n2. Ensure your Terminal/IDE has **Camera Permission** in macOS Settings.\n3. Check `data/camera_error.log` for details.")
+                if st.button("Retry"):
+                    st.session_state["cam_state"] = "idle"
+                    st.rerun()
             else:
-                st.info("📱 Starting iPhone camera...")
-                time.sleep(0.4)
+                st.info("📱 Starting camera... (checking iPhone and Built-in)")
+                time.sleep(0.5)
                 st.rerun()
         elif state == "ready":
-            st.success("✅ iPhone is live!")
+            st.success("✅ Camera is live!")
             
             def trigger_capture():
                 TRIGGER_FLAG.touch()
@@ -166,14 +174,14 @@ def show():
             trigger_time = 0
             if TRIGGER_FLAG.exists():
                 trigger_time = TRIGGER_FLAG.stat().st_mtime
-            if CAPTURE_PATH.exists() and CAPTURE_PATH.stat().st_mtime >= trigger_time and CAPTURE_PATH.stat().st_mtime > time.time() - 10:
+            if CAPTURE_PATH.exists() and CAPTURE_PATH.stat().st_mtime >= trigger_time:
                 st.session_state["cam_state"] = "idle"
                 READY_FLAG.unlink(missing_ok=True)
                 TRIGGER_FLAG.unlink(missing_ok=True)
                 st.rerun()
             else:
                 st.info("⏳ Capturing frame...")
-                time.sleep(0.4)
+                time.sleep(0.5)
                 st.rerun()
         st.divider()
         uploaded_file = st.file_uploader("Or choose an image...", type=["jpg", "jpeg", "png"])
