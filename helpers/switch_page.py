@@ -18,14 +18,8 @@ def switch_page(page_name, recipe_id=None, execute_func=None):
         
     st.session_state.current_page = page_name
     
-    # Force a rerun if we're not inside a callback to ensure immediate page switch
-    # and cleanup of old elements.
-    try:
-        st.rerun()
-    except Exception:
-        # st.rerun() raises a specific exception to stop the script,
-        # which is handled by Streamlit. If we're in a callback, this might fail or be a no-op.
-        pass
+    # We remove st.rerun() from here because it's a no-op in callbacks.
+    # Streamlit automatically reruns the script AFTER the callback completes.
 
 def go_back():
     if 'page_history' in st.session_state and st.session_state.page_history:
