@@ -93,59 +93,49 @@ def auth_screen():
 def main():
     initialize_state()
 
-    # Create a main placeholder for all app content to prevent "squashing" and ghosting
-    main_placeholder = st.empty()
-
-    # Detect page change to help clear the container early
-    curr = st.session_state.current_page
-    if "previous_page_val" not in st.session_state:
-        st.session_state.previous_page_val = curr
-    
-    if st.session_state.previous_page_val != curr:
-        main_placeholder.empty()
-        st.session_state.previous_page_val = curr
-
+    # Routing based on authentication
     if not st.session_state.get('authenticated'):
-        with main_placeholder.container():
-            auth_screen()
+        auth_screen()
         return
 
-    with main_placeholder.container():
-        # --- TOP TAB NAVIGATION ---
-        with st.container(border=False):
-            _, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
-            
-            with home_button:
-                btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
-                st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home")
-
-            with search_button:
-                btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
-                st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",), key="nav_search")
-
-            with scan_button:
-                btn_type = "primary" if st.session_state.current_page == "Scan" else "secondary"
-                st.button("FridgeScan", width='stretch', type=btn_type, on_click=switch_page, args=("Scan",), key="nav_scan")
-
-            with goback_button:
-                st.button("⬅️", width='stretch', help="Go Back", on_click=go_back, key="nav_back")
-
-            with profile_btn:
-                btn_type = "primary" if st.session_state.current_page == "Profile" else "secondary"
-                st.button(f"👤 Profile", width='stretch', type=btn_type, on_click=switch_page, args=("Profile",), key="nav_profile")
-
-            with logout_btn:
-                def do_logout():
-                    logout()
-                st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=do_logout, key="nav_logout")
-
-        st.divider()
-
-        # --- PAGE CONTENT & ROUTING ---
-        curr = st.session_state.current_page
+    # --- TOP TAB NAVIGATION ---
+    with st.container():
+        _, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
         
-        # Determine and show title
-        title_text = PAGE_TITLES.get(curr, lambda: curr)()
+        with home_button:
+            btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
+            st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home")
+
+        with search_button:
+            btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
+            st.button("Search", width='stretch', type=btn_type, on_click=switch_page, args=("Search",), key="nav_search")
+
+        with scan_button:
+            btn_type = "primary" if st.session_state.current_page == "Scan" else "secondary"
+            st.button("FridgeScan", width='stretch', type=btn_type, on_click=switch_page, args=("Scan",), key="nav_scan")
+
+        with goback_button:
+            st.button("⬅️", width='stretch', help="Go Back", on_click=go_back, key="nav_back")
+
+        with profile_btn:
+            btn_type = "primary" if st.session_state.current_page == "Profile" else "secondary"
+            st.button(f"👤 Profile", width='stretch', type=btn_type, on_click=switch_page, args=("Profile",), key="nav_profile")
+
+        with logout_btn:
+            def do_logout():
+                logout()
+            st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=do_logout, key="nav_logout")
+
+    st.divider()
+
+    # --- PAGE CONTENT & ROUTING ---
+    curr = st.session_state.current_page
+    
+    # Deterministic title for the current page
+    title_text = PAGE_TITLES.get(curr, lambda: curr)()
+    
+    # Use a container for the page content to help Streamlit isolate and refresh the layout cleanly
+    with st.container():
         st.title(title_text)
 
         # Routing
