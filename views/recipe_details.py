@@ -9,6 +9,32 @@ from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_r
 def show_title():
     return "Cooking Time!"
 
+@st.fragment
+def show_image_fragment(recipe_title, recipe_id):
+    with st.spinner("Finding image..."):
+        display_recipe_image(recipe_title, key_suffix=f"details_{recipe_id}")
+
+@st.fragment
+def show_nutrition_fragment(recipe_id, user_id):
+    with st.spinner("Calculating nutrition impact..."):
+        nut_cache_key = f"nut_data_{recipe_id}"
+        if nut_cache_key not in st.session_state:
+            st.session_state[nut_cache_key] = get_recipe_nutrition(recipe_id)
+        
+        recipe_nut = st.session_state[nut_cache_key]
+        today_info = get_todays_nutrition(user_id)
+        
+        st.subheader("Nutrition Impact (Weekly % DV)")
+        
+        if not recipe_nut or all(v == 0 for v in recipe_nut.values()):
+            st.warning("Nutrition data momentarily unavailable (API Quota Reached).")
+        
+        fig = draw_nutrition_radar(
+            today_stats=today_info["totals"], 
+            projected_recipe_nut=recipe_nut
+        )
+        st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
+
 def show():
     recipe_id = st.session_state.get('selected_recipe', None)
     user_id = st.session_state.get("user_id")
@@ -17,21 +43,10 @@ def show():
         st.warning("No recipe selected.")
         return
     
-    # PRE-FETCH DATA with a single spinner for the whole page loading experience
-    with st.spinner("Loading recipe details..."):
-        recipe = get_recipe_by_id(recipe_id)
-        if not recipe:
-            st.error("Recipe not found in the database.")
-            return
-            
-        # Ensure nutrition data is loaded
-        nut_cache_key = f"nut_data_{recipe_id}"
-        if nut_cache_key not in st.session_state:
-            st.session_state[nut_cache_key] = get_recipe_nutrition(recipe_id)
-        
-        recipe_nut = st.session_state[nut_cache_key]
-        # New layers: today's actual vs. projected impact
-        today_info = get_todays_nutrition(user_id)
+    recipe = get_recipe_by_id(recipe_id)
+    if not recipe:
+        st.error("Recipe not found in the database.")
+        return
 
     recipe_title = recipe.get("recipe_title", "Unknown Recipe")
 
@@ -39,7 +54,7 @@ def show():
     
     with picture_col:
         st.write("") # Spacer
-        display_recipe_image(recipe_title, key_suffix=f"details_{recipe_id}")
+        show_image_fragment(recipe_title, recipe_id)
 
     with details_col:
         st.title(recipe_title)
@@ -78,17 +93,7 @@ def show():
     with st.container():
         ingredients_col, nut_col = st.columns(2)
         with nut_col:
-            st.subheader("Nutrition Impact (Weekly % DV)")
-            
-            # If everything is 0, it means API quota was hit
-            if not recipe_nut or all(v == 0 for v in recipe_nut.values()):
-                st.warning("Nutrition data momentarily unavailable (API Quota Reached).")
-            
-            fig = draw_nutrition_radar(
-                today_stats=today_info["totals"], 
-                projected_recipe_nut=recipe_nut
-            )
-            st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
+            show_nutrition_fragment(recipe_id, user_id)
         
         with ingredients_col:
             st.subheader("Ingredients")

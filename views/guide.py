@@ -4,8 +4,6 @@ from helpers.db import get_recipe_by_id
 from helpers.switch_page import switch_page
 from helpers.image_helper import display_recipe_image, get_unique_recipe_image_data
 
-def show_title():
-    return "Cooking Interactive Guide"
 
 def show():
     # Use .get() defensively and check for None/empty

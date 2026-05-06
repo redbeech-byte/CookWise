@@ -97,8 +97,14 @@ def main():
         auth_screen()
         return
 
-    # --- TOP TAB NAVIGATION ---
-    _, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
+    curr = st.session_state.current_page
+    title_text = PAGE_TITLES.get(curr, lambda: curr)()
+
+    # --- TOP TAB NAVIGATION (with inline page title) ---
+    title_col, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
+
+    with title_col:
+        st.title(title_text)
 
     with home_button:
         btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
@@ -137,7 +143,6 @@ def main():
     slot_a = st.empty()
     slot_b = st.empty()
 
-    curr = st.session_state.current_page
     if st.session_state.get('_last_rendered_page') != curr:
         # Flip the active slot on every page change
         st.session_state._active_slot = 1 - st.session_state.get('_active_slot', 0)
@@ -150,9 +155,6 @@ def main():
     inactive_slot.empty()
 
     with active_slot.container():
-        title_text = PAGE_TITLES.get(curr, lambda: curr)()
-        st.title(title_text)
-
         if curr == "Home":
             from views import home
             home.show()

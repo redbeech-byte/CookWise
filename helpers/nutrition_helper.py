@@ -187,11 +187,30 @@ def get_past_7_days_nutrition(user_id):
 
     # 3. Sum everything
     totals = {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
-    for item in cooked_recipes:
-        nut = get_recipe_nutrition(item["recipe_id"])
-        if nut:
-            for k in totals:
-                totals[k] += nut.get(k, 0)
+    recipe_ids = [str(item["recipe_id"]) for item in cooked_recipes]
+    
+    # Fetch all cached nutrition in one query to avoid N+1
+    try:
+        nut_res = supabase.table("recipe_nutrition").select("*").in_("recipe_id", recipe_ids).execute()
+        nut_map = {str(item["recipe_id"]): item for item in (nut_res.data or [])}
+    except Exception as e:
+        print(f"Supabase batch fetch error: {e}")
+        nut_map = {}
+        
+    for r_id in recipe_ids:
+        if r_id in nut_map:
+            d = nut_map[r_id]
+            totals["Proteins"] += d.get("proteins", 0)
+            totals["Carbs"] += d.get("carbs", 0)
+            totals["Sugar"] += d.get("sugar", 0)
+            totals["Vitamins"] += d.get("vitamins", 0)
+            totals["Salt"] += d.get("salt", 0)
+            totals["Fats"] += d.get("fats", 0)
+        else:
+            nut = get_recipe_nutrition(r_id)
+            if nut:
+                for k in totals:
+                    totals[k] += nut.get(k, 0)
                 
     # 4. Calculate quality (average per meal scaled to a full day)
     daily_quality = {k: (v / float(count)) * expected_meals for k, v in totals.items()}

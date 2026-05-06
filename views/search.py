@@ -4,8 +4,7 @@ from helpers.db import search_recipes
 from helpers.image_helper import display_recipe_image
 from helpers.supabase_client import get_profile
 
-def show_title():
-    return "Search Recipes"
+
 
 def show():
     profile = get_profile()

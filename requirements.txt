@@ -2,6 +2,7 @@ streamlit
 plotly
 pandas
 numpy
+scikit-learn
 supabase
 requests
 pyobjc
