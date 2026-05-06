@@ -1,0 +1,11 @@
+streamlit
+plotly
+pandas
+numpy
+scikit-learn
+supabase
+requests
+pyobjc
+pyobjc-core
+pyobjc-framework-AVFoundation
+pyobjc-framework-Quartz

@@ -2,8 +2,8 @@
 # Machine-specific overrides can be added here if needed
 
 # Local environment
-venv/
-.env
+.venv
+
 
 # Local data and databases
 data/*
