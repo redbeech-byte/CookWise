@@ -9,8 +9,7 @@ from helpers.image_helper import display_recipe_image
 RESTRICTIONS = ["Vegan", "Vegetarian", "Dairy-Free", "Gluten-Free", "Nut-Free", "Halal", "Kosher"]
 PREFERENCES = ["Spicy", "Sweet", "Savory", "Umami", "Fast", "Slow", "Easy", "Hard"]
 
-def show_title():
-    return "My Profile & Library"
+
 
 def show():
     profile = get_profile()

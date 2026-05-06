@@ -8,8 +8,7 @@ from helpers.supabase_client import get_cooked_recipes, mark_recipe_seen
 from helpers.recommendation_helper import get_recommended_recipes
 from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar, get_todays_nutrition
 
-def show_title():
-    return "Home"
+
 
 def show():
     user_id = st.session_state.get("user_id")

@@ -21,8 +21,7 @@ READY_FLAG    = Path(__file__).parent.parent / "data" / ".cam_ready"
 TRIGGER_FLAG  = Path(__file__).parent.parent / "data" / ".cam_trigger"
 PID_FILE      = Path(__file__).parent.parent / "data" / ".cam_pid"
 
-def show_title():
-    return "FridgeScan"
+
 
 def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=None):
     if st.session_state.get("last_image_hash") != img_hash:
