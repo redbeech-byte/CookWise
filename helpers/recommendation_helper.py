@@ -93,8 +93,8 @@ def get_recommended_recipes(limit=10):
     """Calculates recommendations using K-Nearest Neighbors based on history and profile preferences."""
     from helpers.supabase_client import get_profile
     
-    saved = get_saved_recipes()
-    cooked = get_cooked_recipes()
+    saved = get_saved_recipes() or []
+    cooked = get_cooked_recipes() or []
     profile = get_profile()
     
     user_recipe_ids = set()
@@ -121,9 +121,10 @@ def get_recommended_recipes(limit=10):
         user_profile = user_df[features].mean()
 
     # 2. Inject explicit preferences from profile to strongly influence KNN weights
+    #Fall back to [] if profile is None to avoid errors
     if profile:
-        dietary = profile.get("dietary_restrictions", [])
-        cooking = profile.get("cooking_preferences", [])
+        dietary = profile.get("dietary_restrictions") or []
+        cooking = profile.get("cooking_preferences") or []
         
         # Dietary restrictions are "hard" requirements in KNN space, drastically shift the target vector
         for d in dietary:
