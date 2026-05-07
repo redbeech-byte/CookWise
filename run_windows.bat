@@ -1,3 +1,5 @@
+# While developing the application we ran into reaccuring setup issues when importing the app on different machines.
+# This batch file is a one-click solution to set up the environment and run the app on Windows.
 
 @echo off
 setlocal
