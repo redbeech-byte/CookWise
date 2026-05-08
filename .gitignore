@@ -18,4 +18,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-#MacOS system files .DS_Store **/.DS_Store
+# MacOS system files
+.DS_Store
+**/.DS_Store
