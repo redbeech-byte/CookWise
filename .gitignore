@@ -3,6 +3,10 @@
 
 # Local environment
 .venv
+venv
+env
+*.env
+*.env.local
 
 
 # Local data and databases
@@ -13,3 +17,7 @@ data/*
 __pycache__/
 *.py[cod]
 *$py.class
+
+#MacOS system files
+.DS_Store
+**/.DS_Store
