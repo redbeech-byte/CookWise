@@ -7,7 +7,8 @@ import datetime
 from helpers.db import get_recipe_by_id, get_ingredients_for_recipe
 from helpers.supabase_client import supabase, get_current_user, get_vault_secrets
 
-# Standardized WHO Reference Values for an average adult (2000 kcal)
+# Standardized WHO reference values for an average adult diet.
+# These labels are used by the nutrition radar chart and by the Gemini prompt.
 WHO_REFERENCES = {
     "Proteins": "50g",
     "Carbs": "275g",
@@ -19,12 +20,24 @@ WHO_REFERENCES = {
 
 def get_recipe_nutrition(recipe_id):
     """
-    Retrieves or generates standardized nutritional data for a recipe.
-    Data is stored on Supabase for cross-user consistency.
+    Return nutrition percentages for one typical serving of a recipe.
+
+    The function first checks the central Supabase cache. If the recipe has not
+    been analyzed yet, it asks Gemini to estimate nutrition values, stores the
+    result in Supabase, and returns the generated data.
+
+    Args:
+        recipe_id: The ID of the recipe to look up.
+
+    Returns:
+        A dictionary containing nutrition percentages for Proteins, Carbs,
+        Sugar, Vitamins, Salt, and Fats. Returns None if the recipe does not
+        exist, or zero-values if nutrition generation fails.
     """
     recipe_id = str(recipe_id)
     
-    # 1. Try to fetch from Supabase (Central Cache)
+    # 1. Try to fetch the recipe's nutrition from Supabase first.
+    # This avoids unnecessary Gemini API calls for recipes already analyzed.
     try:
         res = supabase.table("recipe_nutrition").select("*").eq("recipe_id", recipe_id).execute()
         if res.data:
@@ -40,7 +53,8 @@ def get_recipe_nutrition(recipe_id):
     except Exception as e:
         print(f"Supabase fetch error: {e}")
 
-    # 2. Not found, generate using Gemini with the "Hardened Concept"
+    # 2. If no cached nutrition exists, load the recipe and generate nutrition
+    # data using Gemini.
     recipe = get_recipe_by_id(recipe_id)
     if not recipe:
         return None
@@ -49,7 +63,8 @@ def get_recipe_nutrition(recipe_id):
     ingredients_text = ", ".join([ing.get("original_string", "") for ing in ingredients])
     title = recipe.get("recipe_title", "")
     
-    # NEW CONCEPT: Explicit anchor points and forced portion math
+    # The prompt gives Gemini strict daily reference values and forces it to
+    # estimate nutrition for one serving, not for the whole recipe.
     prompt = f"""
     You are a clinical nutritionist using WHO standardized reference values.
     
@@ -80,13 +95,14 @@ def get_recipe_nutrition(recipe_id):
     }}
     """
     
-    # Use Primary and Secondary API Keys from Vault
+    # Load Gemini API keys from the Supabase vault first.
+    # The secondary key is used as a backup if the primary call fails.
     vault = get_vault_secrets()
     api_key_primary = vault.get("GEMINI_API_KEY")
     api_key_secondary = vault.get("GEMINI_API_KEY_SECONDARY")
     
     if not api_key_primary:
-        # Fallback to local secrets if vault is empty/fails
+        # Fallback to Streamlit local secrets if the vault is empty or fails.
         api_key_primary = st.secrets.get("GEMINI_API_KEY")
         api_key_secondary = st.secrets.get("GEMINI_API_KEY_SECONDARY")
 
@@ -96,12 +112,14 @@ def get_recipe_nutrition(recipe_id):
 
     success, result_text, error_msg = call_gemini_nutrition_api(prompt, api_key_primary)
     if not success and api_key_secondary:
+        # Retry with the backup key before giving up.
         success, result_text, error_msg = call_gemini_nutrition_api(prompt, api_key_secondary)
 
     if not success:
         return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
 
-    # Extract JSON
+    # Gemini is instructed to return JSON, but this makes the parser safer in
+    # case the response includes extra text before or after the JSON object.
     json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
     if json_match:
         result_text = json_match.group(0)
@@ -109,7 +127,8 @@ def get_recipe_nutrition(recipe_id):
     try:
         data = json.loads(result_text)
         
-        # Save to Supabase for future use
+        # Save the generated nutrition data so future users/requests can reuse
+        # it without calling Gemini again.
         supabase.table("recipe_nutrition").upsert({
             "recipe_id": recipe_id,
             "proteins": data.get("Proteins", 0),
@@ -126,15 +145,29 @@ def get_recipe_nutrition(recipe_id):
         return {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
 
 def call_gemini_nutrition_api(prompt, api_key):
+    """
+    Send a nutrition prompt to Gemini and return the raw JSON response text.
+
+    Args:
+        prompt: The full instruction prompt sent to Gemini.
+        api_key: Gemini API key used for this request.
+
+    Returns:
+        A tuple of (success, response_text, error_message).
+    """
     try:
+        # Gemini endpoint used for lightweight nutrition estimation.
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": { "response_mime_type": "application/json" }
         }
+        # Timeout prevents the Streamlit app from hanging too long if Gemini is slow.
         response = requests.post(url, json=payload, timeout=20)
         response.raise_for_status()
         res_json = response.json()
+        # Gemini responses are nested, so this extracts the generated text from
+        # the first candidate safely using default fallbacks.
         text = res_json.get('candidates', [])[0].get('content', {}).get('parts', [])[0].get('text', '')
         return True, text, ""
     except Exception as e:
@@ -143,14 +176,23 @@ def call_gemini_nutrition_api(prompt, api_key):
 @st.cache_data(ttl=60) # Short cache for today's stats
 def get_todays_nutrition(user_id):
     """
-    Calculates the ACTUAL sum of nutrition for meals cooked strictly TODAY.
+    Calculate the total nutrition percentages for meals cooked today.
+
+    Args:
+        user_id: The current user's ID.
+
+    Returns:
+        A dictionary containing the number of cooked recipes today and the
+        summed nutrition totals for those recipes.
     """
+    # Start counting from midnight today so only today's cooked meals are included.
     today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     res = supabase.table("cooked_recipes").select("recipe_id").eq("user_id", user_id).gte("cooked_at", today_start).execute()
     
     cooked_recipes = res.data or []
     totals = {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
     
+    # Add each cooked recipe's cached/generated nutrition values into today's totals.
     for item in cooked_recipes:
         nut = get_recipe_nutrition(item["recipe_id"])
         if nut:
@@ -162,10 +204,23 @@ def get_todays_nutrition(user_id):
 @st.cache_data(ttl=300)
 def get_past_7_days_nutrition(user_id):
     """
-    Calculates a 'Representative Daily Quality' based on tracked meals.
-    Logic: (Total Nut / Total Meals) * Expected Meals Per Day
+    Calculate a representative daily nutrition score from the last 7 days.
+
+    Instead of simply summing the last week, this calculates an average meal
+    quality and scales it by the user's expected meals per day.
+
+    Formula:
+        (Total nutrition / Total meals tracked) * Expected meals per day
+
+    Args:
+        user_id: The current user's ID.
+
+    Returns:
+        A dictionary containing the number of meals, expected meals per day,
+        and scaled nutrition totals.
     """
-    # 1. Fetch user's expected meal count (default 3)
+    # 1. Fetch the user's expected meal count. Default to 3 meals/day if the
+    # profile value is missing or cannot be loaded.
     expected_meals = 3
     try:
         from helpers.supabase_client import get_profile
@@ -175,7 +230,7 @@ def get_past_7_days_nutrition(user_id):
     except Exception:
         pass
 
-    # 2. Fetch history
+    # 2. Fetch all recipes the user cooked in the past 7 days.
     seven_days_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
     res = supabase.table("cooked_recipes").select("recipe_id").eq("user_id", user_id).gte("cooked_at", seven_days_ago).execute()
     
@@ -185,11 +240,12 @@ def get_past_7_days_nutrition(user_id):
     if count == 0:
         return {"count": 0, "totals": {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}}
 
-    # 3. Sum everything
+    # 3. Sum the nutrition values for each cooked recipe.
     totals = {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
     recipe_ids = [str(item["recipe_id"]) for item in cooked_recipes]
     
-    # Fetch all cached nutrition in one query to avoid N+1
+    # Fetch all cached nutrition rows in one query to avoid making one Supabase
+    # request per recipe.
     try:
         nut_res = supabase.table("recipe_nutrition").select("*").in_("recipe_id", recipe_ids).execute()
         nut_map = {str(item["recipe_id"]): item for item in (nut_res.data or [])}
@@ -199,6 +255,7 @@ def get_past_7_days_nutrition(user_id):
         
     for r_id in recipe_ids:
         if r_id in nut_map:
+            # Use cached Supabase values when they already exist.
             d = nut_map[r_id]
             totals["Proteins"] += d.get("proteins", 0)
             totals["Carbs"] += d.get("carbs", 0)
@@ -207,39 +264,54 @@ def get_past_7_days_nutrition(user_id):
             totals["Salt"] += d.get("salt", 0)
             totals["Fats"] += d.get("fats", 0)
         else:
+            # If a recipe is missing from the cache, generate and save it now.
             nut = get_recipe_nutrition(r_id)
             if nut:
                 for k in totals:
                     totals[k] += nut.get(k, 0)
                 
-    # 4. Calculate quality (average per meal scaled to a full day)
+    # 4. Calculate representative daily quality: average per meal scaled to
+    # the user's expected number of meals per day.
     daily_quality = {k: (v / float(count)) * expected_meals for k, v in totals.items()}
     
     return {"count": count, "expected_meals": expected_meals, "totals": daily_quality}
 
 def draw_nutrition_radar(today_stats, average_stats=None, projected_recipe_nut=None):
     """
-    Advanced NutriRadar with context-aware layers.
-    - today_stats: Actual intake today (Red Area)
-    - average_stats: Historical quality (Blue Dashed Line)
-    - projected_recipe_nut: Potential impact (Green Line)
+    Build the Plotly radar chart used to visualize nutrition progress.
+
+    Chart layers:
+        - Daily target: 100% reference line.
+        - Today's intake: Actual nutrition consumed today.
+        - Historical average: Optional representative daily nutrition quality.
+        - Projected intake: Optional total if the user cooks the selected recipe.
+
+    Args:
+        today_stats: Actual nutrition totals for today.
+        average_stats: Optional historical average/quality values.
+        projected_recipe_nut: Optional nutrition values for a possible next meal.
+
+    Returns:
+        A Plotly Figure object containing the nutrition radar chart.
     """
     categories = ['Proteins', 'Carbs', 'Sugar', 'Vitamins', 'Salt', 'Fats']
+    # Repeat the first category at the end so the radar chart closes into a loop.
     cats_loop = categories + [categories[0]]
     
     def to_list(d):
+        """Convert a nutrition dictionary into a closed radar-chart value list."""
         return [d.get(c, 0) for c in categories] + [d.get(categories[0], 0)]
         
     fig = go.Figure()
     
-    # 1. Target Line (Reference 100%)
+    # 1. Target line: shows the 100% daily reference for every category.
     target_vals = [100] * 7
     fig.add_trace(go.Scatterpolar(
         r=target_vals, theta=cats_loop, fill='none', name='Daily Target (100%)',
         line=dict(color='rgba(150,150,150,0.5)', dash='dot', width=1)
     ))
     
-    # 2. Historical Average (If provided - usually for Home)
+    # 2. Historical average: shown when this chart is used on the home page.
     if average_stats:
         avg_vals = to_list(average_stats)
         fig.add_trace(go.Scatterpolar(
@@ -247,14 +319,15 @@ def draw_nutrition_radar(today_stats, average_stats=None, projected_recipe_nut=N
             line=dict(color='rgba(0,0,255,0.6)', dash='dash', width=2)
         ))
 
-    # 3. Today's Actual Progress (Always shown)
+    # 3. Today's actual progress: always shown as the main filled area.
     today_vals = to_list(today_stats)
     fig.add_trace(go.Scatterpolar(
         r=today_vals, theta=cats_loop, fill='toself', name="Today's Intake",
         line=dict(color='red', width=2), fillcolor='rgba(255,0,0,0.2)'
     ))
     
-    # 4. Projected Intake (If provided - usually for Recipe Details)
+    # 4. Projected intake: shown on recipe detail pages to preview the impact
+    # of cooking/eating the selected recipe today.
     if projected_recipe_nut:
         proj_vals = []
         for i, c in enumerate(categories):
@@ -266,7 +339,7 @@ def draw_nutrition_radar(today_stats, average_stats=None, projected_recipe_nut=N
             line=dict(color='green', dash='solid', width=3)
         ))
         
-    # Calculate max for axis range
+    # Calculate the axis range dynamically so high values are still visible.
     all_vals = today_vals + target_vals
     if average_stats: all_vals += to_list(average_stats)
     if projected_recipe_nut: all_vals += proj_vals
