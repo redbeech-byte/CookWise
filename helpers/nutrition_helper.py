@@ -16,7 +16,7 @@ WHO_REFERENCES = {
     "Salt": "5g",
     "Fats": "78g"
 }
-
+#recipe nutrition is stored as % of daily value to allow for easy aggregation and comparison across recipes and days. The Gemini prompt is designed to force the model to think in terms of realistic portion sizes and nutritional profiles, rather than just summing ingredients.
 def get_recipe_nutrition(recipe_id):
     """
     Retrieves or generates standardized nutritional data for a recipe.
