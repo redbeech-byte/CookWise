@@ -36,8 +36,8 @@ def get_recipe_nutrition(recipe_id):
     """
     recipe_id = str(recipe_id)
     
-    # 1. Try to fetch the recipe's nutrition from Supabase first.
-    # This avoids unnecessary Gemini API calls for recipes already analyzed.
+    # Check Supabase first so recipes that were already analyzed do not need
+    # another Gemini API call.
     try:
         res = supabase.table("recipe_nutrition").select("*").eq("recipe_id", recipe_id).execute()
         if res.data:
@@ -53,8 +53,8 @@ def get_recipe_nutrition(recipe_id):
     except Exception as e:
         print(f"Supabase fetch error: {e}")
 
-    # 2. If no cached nutrition exists, load the recipe and generate nutrition
-    # data using Gemini.
+    # If the recipe is not cached yet, load its details and let Gemini estimate
+    # the nutrition data.
     recipe = get_recipe_by_id(recipe_id)
     if not recipe:
         return None
@@ -219,8 +219,8 @@ def get_past_7_days_nutrition(user_id):
         A dictionary containing the number of meals, expected meals per day,
         and scaled nutrition totals.
     """
-    # 1. Fetch the user's expected meal count. Default to 3 meals/day if the
-    # profile value is missing or cannot be loaded.
+    # Use the user's expected meal count when available; otherwise assume a
+    # standard 3 meals per day.
     expected_meals = 3
     try:
         from helpers.supabase_client import get_profile
@@ -230,7 +230,7 @@ def get_past_7_days_nutrition(user_id):
     except Exception:
         pass
 
-    # 2. Fetch all recipes the user cooked in the past 7 days.
+    # Look at the user's cooked meals from the past 7 days.
     seven_days_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
     res = supabase.table("cooked_recipes").select("recipe_id").eq("user_id", user_id).gte("cooked_at", seven_days_ago).execute()
     
@@ -240,7 +240,7 @@ def get_past_7_days_nutrition(user_id):
     if count == 0:
         return {"count": 0, "totals": {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}}
 
-    # 3. Sum the nutrition values for each cooked recipe.
+    # Sum the nutrition values for each cooked recipe.
     totals = {"Proteins": 0, "Carbs": 0, "Sugar": 0, "Vitamins": 0, "Salt": 0, "Fats": 0}
     recipe_ids = [str(item["recipe_id"]) for item in cooked_recipes]
     
@@ -270,8 +270,8 @@ def get_past_7_days_nutrition(user_id):
                 for k in totals:
                     totals[k] += nut.get(k, 0)
                 
-    # 4. Calculate representative daily quality: average per meal scaled to
-    # the user's expected number of meals per day.
+    # Convert the average tracked meal into a representative full-day value
+    # based on the user's expected number of meals.
     daily_quality = {k: (v / float(count)) * expected_meals for k, v in totals.items()}
     
     return {"count": count, "expected_meals": expected_meals, "totals": daily_quality}
@@ -304,14 +304,14 @@ def draw_nutrition_radar(today_stats, average_stats=None, projected_recipe_nut=N
         
     fig = go.Figure()
     
-    # 1. Target line: shows the 100% daily reference for every category.
+    # The target line shows the 100% daily reference for every category.
     target_vals = [100] * 7
     fig.add_trace(go.Scatterpolar(
         r=target_vals, theta=cats_loop, fill='none', name='Daily Target (100%)',
         line=dict(color='rgba(150,150,150,0.5)', dash='dot', width=1)
     ))
     
-    # 2. Historical average: shown when this chart is used on the home page.
+    # Show the historical average when this chart is used on the home page.
     if average_stats:
         avg_vals = to_list(average_stats)
         fig.add_trace(go.Scatterpolar(
@@ -319,15 +319,15 @@ def draw_nutrition_radar(today_stats, average_stats=None, projected_recipe_nut=N
             line=dict(color='rgba(0,0,255,0.6)', dash='dash', width=2)
         ))
 
-    # 3. Today's actual progress: always shown as the main filled area.
+    # Today's actual progress is always shown as the main filled area.
     today_vals = to_list(today_stats)
     fig.add_trace(go.Scatterpolar(
         r=today_vals, theta=cats_loop, fill='toself', name="Today's Intake",
         line=dict(color='red', width=2), fillcolor='rgba(255,0,0,0.2)'
     ))
     
-    # 4. Projected intake: shown on recipe detail pages to preview the impact
-    # of cooking/eating the selected recipe today.
+    # On recipe detail pages, this previews how the selected recipe would change
+    # today's total nutrition.
     if projected_recipe_nut:
         proj_vals = []
         for i, c in enumerate(categories):
