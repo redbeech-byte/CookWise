@@ -8,7 +8,9 @@ from helpers.supabase_client import get_saved_recipes, get_cooked_recipes, supab
 
 @st.cache_data(ttl=86400)
 def load_base_features():
-    """Loads an extended version of the recipes table for feature matching using KNN, including TF-IDF ingredients."""
+    # Loading recipe features used by the KNN recommendation model.
+    # This includes normal recipe metadata plus ingredient text that gets converted
+    # into TF-IDF features, so recommendations can consider both structure and flavor.
     res = supabase.table("recipes").select("""
         recipe_id, recipe_title, est_prep_time_min, est_cook_time_min, 
         difficulty, is_vegan, is_vegetarian, is_gluten_free, is_dairy_free, is_nut_free, is_halal, is_kosher,
@@ -19,9 +21,11 @@ def load_base_features():
     df = pd.DataFrame(res.data or [])
     
     if df.empty:
+        # Returning an empty feature list keeps the recommendation function from
+        # trying to train a model when Supabase returns no recipe data.
         return df, []
         
-    # Extract ingredient text for TF-IDF Vectorization
+    # Extracting ingredient names into one text string per recipe for TF-IDF.
     ingredient_texts = []
     for row in res.data:
         ings = []
@@ -33,25 +37,34 @@ def load_base_features():
                     ings.append(ing_name)
         ingredient_texts.append(" ".join(ings))
         
+    # Storing the joined ingredient text beside the recipe rows so the vectorizer
+    # can turn ingredient wording into numeric similarity features.
     df['ingredient_text'] = ingredient_texts
         
-    # Map categorical info to numbers
+    # Mapping categorical difficulty values to numbers so KNN can compare them.
     df['difficulty_num'] = df['difficulty'].map({'Easy': 1, 'Medium': 2, 'Hard': 3}).fillna(1)
+    # Total time combines preparation and cooking because both affect whether a
+    # recipe feels quick or demanding to the user.
     df['total_time'] = df['est_prep_time_min'].fillna(0) + df['est_cook_time_min'].fillna(0)
     
-    # Clean data & calculate median for missing values
+    # Filling missing numeric values with the median avoids losing recipes just
+    # because one recipe has incomplete metadata.
     df['num_ingredients'] = df['num_ingredients'].fillna(df['num_ingredients'].median())
     df['num_steps'] = df['num_steps'].fillna(df['num_steps'].median())
     
-    # Map tastes to numeric features
+    # Turning taste labels into separate numeric flags lets KNN compare flavor
+    # directions like spicy, sweet, savory, and umami.
     tastes = ["Spicy", "Sweet", "Savory", "Umami"]
     for t in tastes:
         df[f'is_{t.lower()}'] = (df['primary_taste'] == t).astype(int)
 
+    # Cook speed is also converted into flags because users may prefer quick or
+    # slower recipes independently of total minutes.
     df['is_fast'] = (df['cook_speed'] == 'Fast').astype(int)
     df['is_slow'] = (df['cook_speed'] == 'Slow').astype(int)
 
-    # Encode main ingredients as boolean columns
+    # Encoding main ingredients as boolean columns helps the model separate broad
+    # recipe types like poultry, seafood, plant-based, or egg/dairy dishes.
     main_ings = ['poultry', 'red_meat', 'seafood', 'plant', 'egg_dairy']
     for ing in main_ings:
         df[f'main_{ing}'] = (df['main_ingredient'] == ing).astype(int)
@@ -63,24 +76,31 @@ def load_base_features():
                 [f'main_{ing}' for ing in main_ings]
     
     for f in base_features:
+        # Coercing everything to numeric prevents strings or missing database values
+        # from breaking the model input matrix.
         df[f] = pd.to_numeric(df[f], errors='coerce').fillna(0).astype(float)
         
-    # Min-max normalization for basic numerical features
+    # Min-max normalization puts all base features on a similar 0-1 scale, so one
+    # large numeric column does not dominate the distance calculation.
     for f in base_features:
         max_val = df[f].max()
         min_val = df[f].min()
         if max_val > min_val:
             df[f] = (df[f] - min_val) / (max_val - min_val)
             
-    # Apply TF-IDF for ingredients (keep to top 150 important flavors to prevent overfitting)
+    # Applying TF-IDF lets ingredient words influence similarity without treating
+    # every ingredient as equally important. Limiting to 150 features keeps the
+    # model lighter and avoids overfitting to rare ingredient words.
     tfidf = TfidfVectorizer(max_features=150, stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['ingredient_text'])
     
-    # Store TF-IDF as columns
+    # Storing TF-IDF values as columns makes them usable alongside the manually
+    # engineered recipe features.
     tfidf_feature_names = [f"tfidf_{w}" for w in tfidf.get_feature_names_out()]
     tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=tfidf_feature_names)
     
-    # Combine TF-IDF dataframe with our main working dataframe
+    # Combining the TF-IDF dataframe with the main dataframe gives each recipe one
+    # complete feature row for KNN.
     df = pd.concat([df, tfidf_df], axis=1)
     
     features = base_features + tfidf_feature_names
@@ -90,50 +110,66 @@ def load_base_features():
 
 @st.cache_data(ttl=600)
 def get_recommended_recipes(limit=10):
-    """Calculates recommendations using K-Nearest Neighbors based on history and profile preferences."""
+    # Calculating recommendations with K-Nearest Neighbors based on saved recipes,
+    # cooked recipes, and explicit profile preferences.
+    # The result is cached briefly because recommendations depend on user history
+    # but do not need to be recalculated on every Streamlit rerun.
     from helpers.supabase_client import get_profile
     
     saved = get_saved_recipes() or []
     cooked = get_cooked_recipes() or []
     profile = get_profile()
     
+    # Saved and cooked recipes together describe what the user has already shown
+    # interest in, so both are used to build the recommendation profile.
     user_recipe_ids = set()
     for item in saved:
         user_recipe_ids.add(str(item.get("recipe_id")))
     for item in cooked:
         user_recipe_ids.add(str(item.get("recipe_id")))
         
-    # Load normalized base features (cached)
+    # Loading the normalized recipe feature table. This is cached separately because
+    # the recipe dataset changes much less often than the user's interactions.
     loaded = load_base_features()
     if len(loaded) != 2 or (isinstance(loaded[0], pd.DataFrame) and loaded[0].empty):
+        # If feature loading fails or returns no recipes, the app returns no recommendations
+        # instead of trying to fit KNN on empty data.
         return []
         
     df, features = loaded
     
-    # 1. Base User Profile from history
+    # Building the base user profile from recipe history.
     user_mask = df['recipe_id_str'].isin(user_recipe_ids)
     user_df = df[user_mask]
     
     if user_df.empty:
-        # If no history, start with a "neutral" profile
+        # If there is no history yet, starting with a neutral profile prevents the
+        # model from inventing a preference from missing data.
         user_profile = pd.Series(0.0, index=features)
     else:
+        # Averaging saved and cooked recipes creates a simple preference vector
+        # representing the kind of recipes the user already likes or uses.
         user_profile = user_df[features].mean()
 
-    # 2. Inject explicit preferences from profile to strongly influence KNN weights
-    #Fall back to [] if profile is None to avoid errors
+    # Adding explicit profile preferences on top of history makes the model respect
+    # stated restrictions and tastes, not only past behavior.
+    # Falling back to [] avoids the common bug where a missing/None profile field
+    # would crash when the code tries to iterate over it.
     if profile:
         dietary = profile.get("dietary_restrictions") or []
         cooking = profile.get("cooking_preferences") or []
         
-        # Dietary restrictions are "hard" requirements in KNN space, drastically shift the target vector
+        # Dietary restrictions are treated as strong signals in KNN space because
+        # they are closer to requirements than casual preferences.
         for d in dietary:
             feat_name = f"is_{d.lower().replace('-', '_')}"
             if feat_name in user_profile:
-                # Strong weighting to push the nearest neighbor calculation towards these specific features.
+                # Using a high weight pushes the nearest-neighbor search strongly
+                # toward recipes that match this restriction.
                 user_profile[feat_name] = 5.0 
         
-        # Cooking preferences (tastes, speed, difficulty)
+        # Cooking preferences adjust taste, speed, and difficulty without making
+        # them as strict as dietary restrictions.
         for c in cooking:
             feat_name = f"is_{c.lower()}"
             if feat_name in user_profile:
@@ -147,22 +183,27 @@ def get_recommended_recipes(limit=10):
             elif c == "Hard":
                 user_profile['difficulty_num'] = 1.0 # Push towards 1 (normalized Hard)
 
-    # 3. Calculate closest neighbors in the feature space
+    # Calculating closest neighbors in the feature space.
+    # Excluding recipes the user already saved or cooked keeps recommendations fresh.
     target_df = df[~user_mask].copy()
     
     if target_df.empty:
+        # If the user has already interacted with every recipe in the dataset,
+        # there is nothing new left to recommend.
         return []
         
-    # Fit the KNN model
+    # Fitting the KNN model on candidate recipes only.
     X = target_df[features].values
+    # Asking for more neighbors than the final limit gives deduplication some room
+    # to remove repeated recipes without returning too few results.
     k_neighbors = min(limit * 2, len(target_df))
     knn_model = NearestNeighbors(n_neighbors=k_neighbors, algorithm='auto', metric='euclidean')
     knn_model.fit(X)
     
-    # Find the nearest items to our idealized user profile target vector
+    # Finding the nearest recipes to the idealized user profile target vector.
     distances, indices = knn_model.kneighbors([user_profile.values])
     
-    # Retrieve top recommended records
+    # Returning the closest recipes after deduplication so the UI receives a clean list.
     recommended = target_df.iloc[indices[0]]
     recipes = recommended.to_dict(orient="records")
     return deduplicate_recipes(recipes)[:limit]
