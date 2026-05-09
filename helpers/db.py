@@ -91,6 +91,7 @@ def get_ingredients_for_recipe(recipe_id):
     
     # Flattening the joined result keeps the output compatible with older helper
     # code that expects ingredient fields in one dictionary.
+    flattened = []
     for item in (res.data or []):
         ing = item.get("ingredients") or {}
         # Merging junction data with ingredient data preserves both the recipe-specific
