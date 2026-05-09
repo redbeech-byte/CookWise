@@ -46,8 +46,8 @@ if errorlevel 1 (
 )
 
 REM 5. Install required packages
-if not exist "requirements.txt" (
-    echo Error: requirements.txt was not found in this folder.
+if not exist "requirements_windows.txt" (
+    echo Error: requirements_windows.txt was not found in this folder.
     pause
     exit /b 1
 )
