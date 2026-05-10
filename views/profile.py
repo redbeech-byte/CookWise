@@ -5,13 +5,15 @@ from helpers.db import get_recipe_by_id, deduplicate_recipes
 from helpers.switch_page import switch_page
 from helpers.image_helper import display_recipe_image
 
-# Available dietary restrictions / Preferences
+# Available dietary restrictions and cooking preferences shown in the profile UI.
+# These labels also need to match the values expected by recommendation/search helpers.
 RESTRICTIONS = ["Vegan", "Vegetarian", "Dairy-Free", "Gluten-Free", "Nut-Free", "Halal", "Kosher"]
 PREFERENCES = ["Spicy", "Sweet", "Savory", "Umami", "Fast", "Slow", "Easy", "Hard"]
 
 
 
 def show():
+    # Loading the profile first because every tab depends on the logged-in user's data.
     profile = get_profile()
     if not profile:
         st.warning("Could not load your profile. Are you logged in?")
@@ -19,20 +21,28 @@ def show():
 
     st.write(f"### Hello, {profile.get('username') or 'Chef'}! 🍳")
     
+    # Splitting the profile into tabs keeps library, preferences, history, and
+    # account actions from becoming one long page.
     tabs = st.tabs(["Personal Library", "Preferences", "Cooking History", "Security"])
     
     with tabs[0]:
         st.subheader("Saved Recipes")
         saved_raw = get_saved_recipes()
+        # Saved recipe rows only store relation data, so each row is hydrated with
+        # the full recipe record before being displayed.
         saved_hydrated = []
         for item in saved_raw:
             r = get_recipe_by_id(item["recipe_id"])
             if r:
                 r_copy = r.copy()
+                # Keeping relation metadata helps display the saved date and create
+                # unique Streamlit keys for each saved item.
                 r_copy['_saved_at'] = item['saved_at']
                 r_copy['_item_id'] = item['id']
                 saved_hydrated.append(r_copy)
         
+        # Deduplicating protects the library display from repeated save rows or
+        # repeated recipe records returned from helper functions.
         saved = deduplicate_recipes(saved_hydrated)
         
         if saved:
@@ -47,6 +57,7 @@ def show():
                             with st.container(border=True):
                                 display_recipe_image(r.get('recipe_title', 'recipe'), key_suffix=f"save_{r['_item_id']}")
                                 title = r.get("recipe_title", "Unknown Title")
+                                # Shortening long titles keeps saved recipe cards from becoming uneven.
                                 if len(title) > 50:
                                     title = title[:47] + "..."
                                 st.write(f"**{title}**")
@@ -77,15 +88,21 @@ def show():
         st.subheader("Dietary Restrictions & Preferences")
         st.write("We use this to highlight recipes suited for you.")
         
+        # Using `or []` handles both missing fields and explicit None values from Supabase.
+        # This prevents toggle loops from trying to check membership inside None.
         curr_rest = profile.get("dietary_restrictions") or []
         curr_pref = profile.get("cooking_preferences") or []
         curr_meals = profile.get("expected_meals_per_day") or 3
         
         st.write("#### Normal Meals Per Day")
         st.write("Used to calculate your daily nutritional coverage.")
+        # The meal count feeds nutrition calculations that scale recent meals into
+        # a representative daily estimate.
         selected_meals = st.slider("How many meals do you usually cook/eat per day?", min_value=1, max_value=5, value=int(curr_meals))
 
         st.write("#### Restrictions")
+        # Building a fresh list from toggles makes the saved restrictions reflect
+        # exactly what is selected on this page.
         selected_restrictions = []
         rest_cols = st.columns(4)
         for idx, rest in enumerate(RESTRICTIONS):
@@ -95,6 +112,8 @@ def show():
                     selected_restrictions.append(rest)
                     
         st.write("#### Preferences")
+        # Preferences influence recommendation weighting and search filtering, but
+        # are not as strict as dietary restrictions.
         selected_preferences = []
         pref_cols = st.columns(4)
         for idx, pref in enumerate(PREFERENCES):
@@ -104,6 +123,7 @@ def show():
                     
         st.write("")
         def save_prefs():
+            # Saving all preference fields together keeps profile settings consistent.
             update_profile(selected_restrictions, selected_preferences, selected_meals)
             st.toast("Preferences updated!")
             
@@ -112,15 +132,21 @@ def show():
     with tabs[2]:
         st.subheader("Completed Recipes")
         cooked_raw = get_cooked_recipes()
+        # Cooked history also starts as relation/event rows, so each entry is
+        # hydrated with full recipe details for display.
         cooked_hydrated = []
         for item in cooked_raw:
             r = get_recipe_by_id(item["recipe_id"])
             if r:
                 r_copy = r.copy()
+                # Keeping the cooked timestamp lets the history card show when the
+                # recipe was completed.
                 r_copy['_cooked_at'] = item['cooked_at']
                 r_copy['_item_id'] = item['id']
                 cooked_hydrated.append(r_copy)
         
+        # The display deduplicates cooked recipes even though the underlying history
+        # table may contain multiple events for the same recipe.
         cooked = deduplicate_recipes(cooked_hydrated)
         
         if cooked:
@@ -135,6 +161,7 @@ def show():
                             with st.container(border=True):
                                 display_recipe_image(r.get('recipe_title', 'recipe'), key_suffix=f"cook_{r['_item_id']}")
                                 title = r.get("recipe_title", "Unknown Title")
+                                # Shortening long titles keeps cooked history cards from becoming uneven.
                                 if len(title) > 50:
                                     title = title[:47] + "..."
                                 st.write(f"**{title}**")
@@ -161,6 +188,8 @@ def show():
                 conf_pw = st.text_input("Confirm Password", type="password")
                 
                 def do_update_pw():
+                    # Password updates require both fields to match so accidental
+                    # mistypes are caught before calling Supabase Auth.
                     if new_pw and new_pw == conf_pw:
                         try:
                             update_password(new_pw)
@@ -179,6 +208,8 @@ def show():
                 confirm_del = st.checkbox("I understand the consequences, delete my account.")
                 
                 def do_delete():
+                    # Account deletion is separated behind a confirmation checkbox
+                    # because it is the most destructive profile action.
                     try:
                         delete_account()
                     except Exception as e:

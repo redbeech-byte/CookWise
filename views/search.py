@@ -7,23 +7,31 @@ from helpers.supabase_client import get_profile
 
 
 def show():
+    # Loading the user's profile lets the search page start with their saved
+    # dietary restrictions and cooking preferences already applied.
     profile = get_profile()
     profile_dietary = profile.get("dietary_restrictions", []) if profile else []
     profile_cooking = profile.get("cooking_preferences", []) if profile else []
 
     with st.container(border=True):
+        # Keeping the search input wide and the filter button compact makes the
+        # page feel like a normal recipe search interface.
         search_bar, spacer, filter_popover = st.columns([9, 1, 2], vertical_alignment="bottom")
 
         with search_bar:
             query = st.text_input("", placeholder="Enter ingredient, name, or keywords...")
             
         with filter_popover:
+            # Putting filters in a popover keeps the page clean while still making
+            # detailed search controls available.
             with st.popover("Filter", icon="🎯"):
                 min_time, max_time = st.slider("Time Range (mins)", min_value=10, max_value=240, value=(10, 240), step=2)
                 difficulty = st.selectbox("Difficulty", ["Any", "Easy", "Medium", "Hard"])
                 
                 st.write("Dietary Preferences")
                 col1, col2 = st.columns(2)
+                # Building dietary_prefs from checked boxes makes the selected
+                # restrictions explicit before passing them into the database helper.
                 dietary_prefs = []
                 with col1:
                     if st.checkbox("Vegan", value="Vegan" in profile_dietary): dietary_prefs.append("Vegan")
@@ -35,9 +43,13 @@ def show():
                     if st.checkbox("Nut-Free", value="Nut-Free" in profile_dietary): dietary_prefs.append("Nut-Free")
                 
                 if profile_cooking:
+                    # Cooking preferences come from the profile automatically, so the
+                    # user understands why search results may already be filtered.
                     st.info(f"Auto-applying cooking preferences: {', '.join(profile_cooking)}")
                     
         with st.spinner("Searching recipes..."):
+            # Passing None for unchanged time boundaries keeps the database query
+            # from filtering by the default slider limits unnecessarily.
             results = search_recipes(
                 query=query, 
                 limit=50, 
@@ -51,6 +63,7 @@ def show():
     st.subheader(f"Results ({len(results)})")
 
     if results:
+        # Three cards per row gives each recipe enough room for image, title, and action button.
         cols_per_row = 3
         for i in range(0, len(results), cols_per_row):
             cols = st.columns(cols_per_row)
@@ -59,9 +72,11 @@ def show():
                     recipe = results[i + j]
                     with cols[j]:
                         with st.container(border=True):
+                            # The recipe id keeps image/display keys unique across cards.
                             display_recipe_image(recipe.get('recipe_title', 'recipe'), key_suffix=str(recipe['recipe_id']))
                             st.write(f"**{recipe.get('recipe_title')}**")
                             st.write(f"⏱️ {recipe.get('est_prep_time_min', 0)} mins")
+                            # Opening a result stores the selected recipe through switch_page.
                             st.button(
                                 "View Recipe", 
                                 key=f"search_btn_{recipe['recipe_id']}",
