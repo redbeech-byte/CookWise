@@ -1,32 +1,37 @@
 import pandas as pd
 import os
 import streamlit as st
-from helpers.supabase_client import supabase
+from helpers.supabase_client import supabase # this is the general client for connecting to the supabase database
 
 @st.cache_data(ttl=3600)
 def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=None, dietary_prefs=None, cooking_prefs=None):
-    """
-    Searches recipes on Supabase using Full-Text Search and filters.
-    """
+    # Searching recipes on Supabase using a mix of direct filters and full-text search.
+    # The result is cached because search pages can rerun often in Streamlit.
     query = query.strip()
     
-    # Start building the query
+    # Starting with the recipes table keeps the query flexible before filters are added.
     q = supabase.table("recipes").select("*")
+    # q is a query builder object provided by the Supabase
     
-    # 1. Basic Filters
+    # Applying basic filters first narrows the recipe set before text search is added.
     if difficulty and difficulty != "Any":
         q = q.eq('difficulty', difficulty)
         
     if max_time:
-        q = q.lte('est_prep_time_min', max_time)
+        q = q.lte('est_prep_time_min', max_time) # less then or equal to max_time
+
+    if min_time:
+        q = q.gte('est_prep_time_min', min_time) # greater then or equal to min_time
         
-    # 2. Dietary Restrictions
+    # Dietary preferences map directly to boolean columns such as is_vegan or
+    # is_gluten_free, so each selected preference becomes a required filter.
     if dietary_prefs:
         for pref in dietary_prefs:
             col_name = f"is_{pref.lower().replace('-', '_')}"
             q = q.eq(col_name, True)
             
-    # 3. Cooking Preferences (Tastes)
+    # Cooking preferences include both taste labels and practical choices like
+    # speed or difficulty, so each option maps to the matching recipe column.
     if cooking_prefs:
         for pref in cooking_prefs:
             if pref in ["Spicy", "Sweet", "Savory", "Umami"]:
@@ -40,11 +45,11 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
             elif pref == "Hard":
                 q = q.eq("difficulty", "Hard")
 
-    # Apply limit
+    # Limiting the number of rows keeps the search response lightweight for the UI.
     q = q.limit(limit)
     
-    # 4. Full-Text Search MUST be applied last because it returns a SyncQueryRequestBuilder
-    # which does not support further method chaining for filters/limits in this version of the client.
+    # Full-text search is applied last because this Supabase client version returns
+    # a builder that does not support more filter/limit chaining afterward.
     if query:
         q = q.text_search('fts', query)
 
@@ -52,15 +57,17 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
     return deduplicate_recipes(res.data or [])
 
 def deduplicate_recipes(recipes):
-    """
-    Deduplicates a list of recipe dictionaries by recipe_id and then by recipe_title (case-insensitive).
-    """
+    # Removing duplicates by recipe_id first and recipe_title second.
+    # The title check catches cases where the same recipe appears with different ids
+    # or from joined/search results that repeat similar rows.
     unique_recipes = []
     seen_ids = set()
     seen_titles = set()
     
     for recipe in recipes:
         recipe_id = recipe.get('recipe_id')
+        # Normalizing the title makes duplicate detection case-insensitive and ignores
+        # extra spaces at the beginning or end.
         recipe_title = str(recipe.get('recipe_title', '')).strip().lower()
         
         if recipe_id not in seen_ids and recipe_title not in seen_titles:
@@ -73,32 +80,42 @@ def deduplicate_recipes(recipes):
 
 @st.cache_data(ttl=3600)
 def get_recipe_by_id(recipe_id):
+    # Fetching one recipe row by its id for detail pages and helper functions.
     res = supabase.table("recipes").select("*").eq("recipe_id", recipe_id).execute()
     return res.data[0] if res.data else None
 
 @st.cache_data(ttl=3600)
 def get_ingredients_for_recipe(recipe_id):
-    # Fetch from the junction table and ingredients table
+    # Fetching from the junction table and the ingredients table because recipe
+    # ingredients are stored as a many-to-many relationship.
     res = supabase.table("recipe_ingredients")\
         .select("*, ingredients(*)")\
         .eq("recipe_id", recipe_id)\
         .execute()
     
-    # Flatten the result to match the old format
+    # Flattening the joined result keeps the output compatible with older helper
+    # code that expects ingredient fields in one dictionary.
     flattened = []
     for item in (res.data or []):
         ing = item.get("ingredients") or {}
-        # Merge junction data (if any) with ingredient data
+        # Merging junction data with ingredient data preserves both the recipe-specific
+        # link information and the ingredient details.
         combined = {**ing, **item}
         flattened.append(combined)
     return flattened
 
+
+# for the fridge scan
 @st.cache_data(ttl=3600)
 def search_recipes_by_ingredients(ingredients_list, limit=12, dietary_prefs=None, cooking_prefs=None):
+    # Searching by ingredients is handled by a Supabase RPC because the matching
+    # logic is more complex than a simple table filter.
     if not ingredients_list:
+        # Returning no results for an empty ingredient list avoids an unnecessary
+        # database call and prevents unclear recommendations.
         return []
     
-    # Use the RPC function we created on Supabase
+    # Passing None for unselected preferences lets the RPC ignore those filters.
     params = {
         "search_ingredients": ingredients_list,
         "row_limit": limit,
@@ -119,5 +136,7 @@ def search_recipes_by_ingredients(ingredients_list, limit=12, dietary_prefs=None
         "pref_hard": True if "Hard" in (cooking_prefs or []) else None,
     }
     
+    # The RPC returns candidate recipes based on ingredient overlap and optional
+    # dietary/cooking filters.
     res = supabase.rpc("search_recipes_by_ingredients", params).execute()
     return deduplicate_recipes(res.data or [])

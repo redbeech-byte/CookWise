@@ -2,7 +2,7 @@ import streamlit as st
 import time
 import os
 from helpers.switch_page import switch_page, go_back
-from helpers.supabase_client import login, signup, logout, get_current_user
+from helpers.supabase_client import login, signup, logout, get_current_user # Importing from the supabase helper creates a client that is cached
 
 # Configuring the global Streamlit app window.
 st.set_page_config(page_title="CookWise", layout="wide")
@@ -17,6 +17,7 @@ st.logo(logo_path, size="large")
 
 # Mapping internal page names to the titles shown in the UI.
 # Keeping titles in one place makes them easier to maintain consistently.
+# And the title can be displayed outside the page modules, which looks better in the top tab navigation.
 PAGE_TITLES = {
     "Home": lambda: "Home",
     "Search": lambda: "Search Recipes",
@@ -46,13 +47,13 @@ def initialize_state():
     # This avoids repeated remote auth checks during normal reruns.
     if 'authenticated' not in st.session_state:
         try:
-            user = get_current_user()
+            user = get_current_user() # After login supabase gives a session token that is saved in pythons memory and is different from sessions in streamlit.
 
             # Saving the logged-in user state if Supabase returns a valid session.
             if user and hasattr(user, 'user') and user.user:
                 st.session_state.authenticated = True
                 st.session_state.user_id = user.user.id
-                st.session_state.username = user.user.user_metadata.get('username', 'Chef')
+                st.session_state.username = user.user.user_metadata.get('username', 'Chef') # also used to personalize the UI with the user's name
             else:
                 st.session_state.authenticated = False
         except Exception:
@@ -80,7 +81,7 @@ def auth_screen():
                     submitted = st.form_submit_button("Log In", type="primary", use_container_width=True)
                     if submitted:
                         try:
-                            # Sending the entered credentials to the Supabase login helper.
+                            # Sending the entered credentials to the secure Supabase login helper.
                             res = login(email, password)
 
                             # Saving the returned user session if login succeeds.
@@ -108,7 +109,7 @@ def auth_screen():
                             st.error("Please enter a username.")
                         else:
                             try:
-                                res = signup(new_email, new_password, new_username)
+                                res = signup(new_email, new_password, new_username) # The signup helper creates a new user in Supabase Auth
                                 if res and res.user:
                                     st.success("Signup successful! Log in to get started.")
                                     st.info("Note: If you didn't see a success message before but it says user exists, try logging in.")
@@ -123,7 +124,7 @@ def auth_screen():
 
 
 def main():
-    # Preparing session state before rendering any UI.
+    # Preparing session state before rendering any UI including auth check
     initialize_state()
 
     # Showing only the auth screen when the user is not logged in.
@@ -144,12 +145,12 @@ def main():
     title_col, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
 
     with title_col:
-        st.title(title_text)
+        st.title(title_text) #dynamic
 
     with home_button:
         # Highlighting the active page button using the "primary" style.
         btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
-        st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home")
+        st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home") # always use on_click with a page switch to faster loading
 
     with search_button:
         btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
@@ -170,14 +171,14 @@ def main():
         # Wrapping logout in a small helper function so `on_click` receives
         # the function itself instead of executing logout immediately.
         def do_logout():
-            logout()
+            logout() # Calling the secure Supabase logout helper to clear the session server-side and clear streamlit cache and session state locally.
         st.button("🚪", width='stretch', type="secondary", help="Logout", on_click=do_logout, key="nav_logout")
 
     # Visually separating the top navigation from the page content below.
     st.divider()
 
     # --- PAGE CONTENT (double-buffered) ---
-    # Creating placeholder slots to avoid leftover UI elements when switching pages with different layouts.
+    # Creating placeholder slots to avoid leftover UI elements and ghosting when switching pages with different layouts.
     slot_a = st.empty()
     slot_b = st.empty()
 
@@ -194,7 +195,7 @@ def main():
     # Clearing the inactive slot so old page content is removed explicitly.
     inactive_slot.empty()
 
-    # Rendering the current page inside the active slot.
+    # Rendering the current page inside the active slot. Router logic
     with active_slot.container():
         if curr == "Home":
             from views import home
