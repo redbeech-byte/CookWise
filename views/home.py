@@ -6,7 +6,7 @@ from helpers.db import search_recipes, get_recipe_by_id
 from helpers.image_helper import display_recipe_image, get_unique_recipe_image_data
 from helpers.supabase_client import get_cooked_recipes, mark_recipe_seen
 from helpers.recommendation_helper import get_recommended_recipes
-from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar, get_todays_nutrition
+from helpers.nutrition_helper import get_past_7_days_nutrition, draw_nutrition_radar, get_todays_nutrition, get_recipe_nutrition
 
 
 
@@ -32,6 +32,7 @@ def show():
     # card on the right.
     graph, spacer1, navigation, spacer2 = st.columns([4, 0.5, 2, 0.5])
 
+    # A orientation, welcome panel with quick access to continue the latest recipe
     with navigation:
         with st.container():
             # First-time users have no cooking history and no active guide yet, so
@@ -92,6 +93,7 @@ def show():
                         args=("Recipe Details", current_guide_id, lambda: mark_recipe_seen(current_guide_id))
                     )
 
+    # The NutriRadar is a key home-page feature that gives users a visual snapshot of their nutrition history and today's progress.
     with graph:
         st.subheader("Your NutriRadar")
         with st.container(border=True):
@@ -101,7 +103,7 @@ def show():
                 today_stats=today_info["totals"],
                 average_stats=avg_info["totals"]
             )
-            st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
+            st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True}) # make sure it is not interactive
 
     # Recommendations are the main home-page discovery feature and are based on
     # saved/cooked history plus profile preferences.
@@ -119,7 +121,8 @@ def show():
     for r in recipes:
         get_unique_recipe_image_data(r.get('recipe_title', 'recipe'))
 
-    # The carousel index is stored in session state so it survives Streamlit reruns.
+    # The carousel index is stored in session state so it survives Streamlit reruns
+    # The index is which 4 of the 12 recipes are currently displayed
     if "carousel_idx" not in st.session_state:
         st.session_state.carousel_idx = 0
 
@@ -130,6 +133,7 @@ def show():
 
     col_prev, col_content, col_next = st.columns([1, 15, 1], vertical_alignment="center")
 
+    # the button to spin the carousel to the left
     with col_prev:
         def prev_carousel():
             # Modulo wrapping lets the carousel loop from the first item back to the last.
@@ -145,11 +149,14 @@ def show():
         
         card_cols = st.columns(len(current_recipes))
         
+        # zip is a convenient way to iterate over the current recipes and their corresponding column containers in parallel
         for col, recipe in zip(card_cols, current_recipes):
             rid = recipe.get("recipe_id")
             with col:
                 with st.container(border=True):
                     title = recipe.get("recipe_title", "Unknown Title")
+                    
+                    # fetching and displaying the recipe image by title using the unique image helper from unsplash
                     display_recipe_image(title, key_suffix=f"home_{rid}")
                     
                     # Estimating title height keeps cards in the same row visually aligned
@@ -166,6 +173,10 @@ def show():
                     st.write(f"⏱️ **{recipe.get('est_prep_time_min', 0)} mins**")
                     st.write("")
                     
+                    # Triggering nutrition lookup warms the cache for recipes
+                    # the user may open from the recommended list.
+                    get_recipe_nutrition(rid)
+                    
                     # Marking the recipe as seen when opening it helps recommendation
                     # history reflect what the user has already viewed.
                     st.button(
@@ -173,9 +184,9 @@ def show():
                         key=f"btn_{rid}", 
                         use_container_width=True,
                         on_click=switch_page,
-                        args=("Recipe Details", rid, lambda r=rid: mark_recipe_seen(r))
+                        args=("Recipe Details", rid, lambda r=rid: mark_recipe_seen(r)) # using a lambda to capture the current recipe id in the loop for the on_click callback
                     )
-
+    # the button to spin the carousel to the right
     with col_next:
         def next_carousel():
             # Modulo wrapping lets the carousel continue from the last item back to the first.

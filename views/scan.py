@@ -74,6 +74,7 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
             
     ingredients_list = st.session_state.get("scanned_ingredients")
     
+    # build the query for the search by identified ingredients and profile preferences
     if ingredients_list:
         st.success(f"**Identified Ingredients:** {', '.join(ingredients_list)}")
         
@@ -95,6 +96,7 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
             cooking_prefs=cooking
         )
         
+        # a tieling grid layout to display recipe results
         if recipes:
             st.subheader(f"Matching Recipes ({len(recipes)})")
             cols_per_row = 3
@@ -122,7 +124,7 @@ def process_and_search_recipes(image_bytes, mime_type="image/jpeg", img_hash=Non
                                     key=f"upload_btn_{recipe['recipe_id']}", 
                                     use_container_width=True,
                                     on_click=switch_page,
-                                    args=("Recipe Details", recipe['recipe_id'])
+                                    args=("Recipe Details", recipe['recipe_id']) # on click it will run the switch page function which recive the args to the recipe details page with the selected recipe id
                                 )
         else:
             st.warning("No recipes found matching these ingredients.")
@@ -188,7 +190,12 @@ def show():
     state = st.session_state["cam_state"]
     col1, col2 = st.columns(2)
     
+    # there are 4 different states the camera can be in: idle, starting, ready, and capturing, each state will show different UI elements and trigger different actions
+    # then we also have manual upload at the bottom
     with col1:
+
+        # This is the first state that starts the process if the button is clicked
+        # it starts the helper script as a subprocess and changes the ui to show that the state that camera is starting
         if state == "idle":
             # Clearing old flags resets communication with the camera helper before
             # starting a new capture flow.
@@ -211,6 +218,7 @@ def show():
 
             st.button("📷 Take Photo with iPhone Camera", use_container_width=True, on_click=start_cam)
 
+        # It will regularly check if the helper script has created the ready flag to know when the camera stream is live and ready for capturing
         elif state == "starting":
             if READY_FLAG.exists():
                 # The helper creates READY_FLAG once the camera stream is live.
@@ -228,6 +236,8 @@ def show():
                 st.info("📱 Starting camera... (checking iPhone and Built-in)")
                 time.sleep(0.5)
                 st.rerun()
+
+        # Once the camera is ready, the user can trigger a capture.
         elif state == "ready":
             st.success("✅ Camera is live!")
             
@@ -238,6 +248,7 @@ def show():
             
             st.button("📸 Capture now!", use_container_width=True, on_click=trigger_capture)
 
+        # After triggering, it waits for the helper to save the captured image and then moves back to idle state to show the captured image
         elif state == "capturing":
             trigger_time = 0
             if TRIGGER_FLAG.exists():
@@ -267,6 +278,8 @@ def show():
             st.image(uploaded_file, caption="Uploaded Image", use_container_width=True)
             image_bytes_to_process = uploaded_file.getvalue()
             mime_type_to_process = uploaded_file.type
+        
+        # If the camera capture flow just completed, the captured image will be available at CAPTURE_PATH
         elif state == "idle" and CAPTURE_PATH.exists():
             try:
                 st.image(str(CAPTURE_PATH), caption="Captured Image", use_container_width=True)
@@ -283,4 +296,7 @@ def show():
         # Hashing the bytes identifies whether the user is still looking at the
         # same image or has uploaded/captured a new one.
         img_hash = hashlib.md5(image_bytes_to_process).hexdigest()
+
+        # giving the image to gemini and then searching for recipes based on the identified ingredients and profile preferences, 
+        # this function is defined above
         process_and_search_recipes(image_bytes_to_process, mime_type_to_process, img_hash)

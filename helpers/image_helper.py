@@ -8,6 +8,9 @@ from helpers.supabase_client import get_vault_secrets
 # Unsplash requires attribution links to identify the app that sent the traffic.
 APP_NAME_TRACKING = "?utm_source=MyRecipeApp&utm_medium=referral"
 
+#the UI orchestrating function is at the bottom display_recipe_image
+
+# Fetches image data from Unsplash based on the query, with caching to optimize performance and reduce API calls.
 @st.cache_data(ttl=86400)
 def _fetch_unsplash_results(query: str):
     # Searching with "food" added helps Unsplash return recipe-style images instead
@@ -74,13 +77,18 @@ def get_unique_recipe_image_data(query: str):
     if not query:
         return fallback_data
 
+
+    # Fetching results from Unsplash and applying logic to pick one image that is both relevant and not recently seen.
+    # It returns multiple potential images, the images are passed as urls
+    # metadata about the photographer and the download endpoint for tracking trigger_unsplash_download
     results = _fetch_unsplash_results(query)
     
     if not results:
         return fallback_data
         
     # Prefer images that have not appeared recently, so pages with many recipe
-    # cards feel more varied.
+    # cards feel more varied. 
+    # remember that the up to 30 results are already sorted by relevance from Unsplash
     valid_images = [img for img in results if img["urls"]["regular"] not in st.session_state.recent_image_history]
     
     if valid_images:
@@ -90,6 +98,8 @@ def get_unique_recipe_image_data(query: str):
         # keeps the image relevant while avoiding a completely deterministic repeat.
         chosen_img = random.choice(results[:10])
         
+    # Storing the chosen image URL in the recent history ensures future selections will try to avoid it,
+    # while the mapping keeps this image associated with the recipe query across Streamlit reruns.
     final_url = chosen_img["urls"]["regular"]
     st.session_state.recent_image_history.append(final_url)
     
@@ -100,6 +110,7 @@ def get_unique_recipe_image_data(query: str):
     
     # Unsplash asks apps to trigger the download endpoint when an image is used,
     # which helps their platform track image usage correctly.
+    # this will be fed into the trigger_unsplash_download function
     download_location = chosen_img["links"]["download_location"]
     
     final_data = {
@@ -115,6 +126,9 @@ def get_unique_recipe_image_data(query: str):
     st.session_state.recipe_image_mapping[query] = final_data
     return final_data
 
+
+# Unsplash requires applications to notify their API whenever an image is "used" (displayed to a user)
+# This function sends that notification 
 def trigger_unsplash_download(download_endpoint: str):
     # Triggering the Unsplash download endpoint records that the app displayed
     # the image. This is separate from simply showing the image URL.
@@ -131,6 +145,8 @@ def trigger_unsplash_download(download_endpoint: str):
         # Failing to record the download should not stop the recipe page from loading.
         pass
 
+
+#this is the UI orchestrating function for displaying recipe images, that actually gets calle from the other files
 def display_recipe_image(query: str, key_suffix: str = "", use_container_width=True):
     # Fetching image data separately keeps the display function focused on Streamlit
     # rendering and attribution.
@@ -138,7 +154,10 @@ def display_recipe_image(query: str, key_suffix: str = "", use_container_width=T
     
     st.image(image_data["url"], use_container_width=use_container_width)
     
+
+    # here we comply with Unsplash's API usage requirement
     if image_data.get("is_unsplash"):
+
         # The marker prevents repeated download tracking calls for the same rendered
         # image during Streamlit reruns.
         download_marker_key = f"downloaded_{image_data['url']}_{key_suffix}"

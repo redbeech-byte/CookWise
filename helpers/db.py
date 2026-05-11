@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import streamlit as st
-from helpers.supabase_client import supabase
+from helpers.supabase_client import supabase # this is the general client for connecting to the supabase database
 
 @st.cache_data(ttl=3600)
 def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=None, dietary_prefs=None, cooking_prefs=None):
@@ -11,13 +11,17 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
     
     # Starting with the recipes table keeps the query flexible before filters are added.
     q = supabase.table("recipes").select("*")
+    # q is a query builder object provided by the Supabase
     
     # Applying basic filters first narrows the recipe set before text search is added.
     if difficulty and difficulty != "Any":
         q = q.eq('difficulty', difficulty)
         
     if max_time:
-        q = q.lte('est_prep_time_min', max_time)
+        q = q.lte('est_prep_time_min', max_time) # less then or equal to max_time
+
+    if min_time:
+        q = q.gte('est_prep_time_min', min_time) # greater then or equal to min_time
         
     # Dietary preferences map directly to boolean columns such as is_vegan or
     # is_gluten_free, so each selected preference becomes a required filter.
@@ -100,6 +104,8 @@ def get_ingredients_for_recipe(recipe_id):
         flattened.append(combined)
     return flattened
 
+
+# for the fridge scan
 @st.cache_data(ttl=3600)
 def search_recipes_by_ingredients(ingredients_list, limit=12, dietary_prefs=None, cooking_prefs=None):
     # Searching by ingredients is handled by a Supabase RPC because the matching

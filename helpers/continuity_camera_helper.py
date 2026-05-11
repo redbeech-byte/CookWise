@@ -5,6 +5,8 @@ import ctypes
 import threading
 from pathlib import Path
 
+# this was coded with the help of AI
+
 # Writing camera errors to a local log file makes debugging easier because this
 # helper usually runs as a separate process from the Streamlit page.
 LOG_PATH = Path(__file__).parent.parent / "data" / "camera_error.log"
