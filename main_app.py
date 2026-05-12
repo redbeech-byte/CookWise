@@ -2,7 +2,8 @@ import streamlit as st
 import time
 import os
 from helpers.switch_page import switch_page, go_back
-from helpers.supabase_client import login, signup, logout, get_current_user # Importing from the supabase helper creates a client that is cached
+# Importing from the supabase helper creates a client that is cached.
+from helpers.supabase_client import login, signup, logout, get_current_user 
 
 # Configuring the global Streamlit app window.
 st.set_page_config(page_title="CookWise", layout="wide")
@@ -47,13 +48,13 @@ def initialize_state():
     # This avoids repeated remote auth checks during normal reruns.
     if 'authenticated' not in st.session_state:
         try:
-            user = get_current_user() # After login supabase gives a session token that is saved in pythons memory and is different from sessions in streamlit.
+            user = get_current_user()
 
             # Saving the logged-in user state if Supabase returns a valid session.
             if user and hasattr(user, 'user') and user.user:
                 st.session_state.authenticated = True
                 st.session_state.user_id = user.user.id
-                st.session_state.username = user.user.user_metadata.get('username', 'Chef') # also used to personalize the UI with the user's name
+                st.session_state.username = user.user.user_metadata.get('username', 'Chef')
             else:
                 st.session_state.authenticated = False
         except Exception:
@@ -109,7 +110,8 @@ def auth_screen():
                             st.error("Please enter a username.")
                         else:
                             try:
-                                res = signup(new_email, new_password, new_username) # The signup helper creates a new user in Supabase Auth
+                                # The signup helper creates a new user in Supabase Auth.
+                                res = signup(new_email, new_password, new_username) 
                                 if res and res.user:
                                     st.success("Signup successful! Log in to get started.")
                                     st.info("Note: If you didn't see a success message before but it says user exists, try logging in.")
@@ -145,12 +147,13 @@ def main():
     title_col, home_button, search_button, scan_button, profile_btn, logout_btn, goback_button = st.columns([5, 2, 2, 2, 2, 1, 1], vertical_alignment="bottom")
 
     with title_col:
-        st.title(title_text) #dynamic
+        st.title(title_text)
 
     with home_button:
         # Highlighting the active page button using the "primary" style.
+        # Creating the actual button, making sure loading the page is triggered by click and creating a key for Streamlit identification. 
         btn_type = "primary" if st.session_state.current_page == "Home" else "secondary"
-        st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home") # always use on_click with a page switch to faster loading
+        st.button("Home", width='stretch', type=btn_type, on_click=switch_page, args=("Home",), key="nav_home")
 
     with search_button:
         btn_type = "primary" if st.session_state.current_page == "Search" else "secondary"
@@ -178,13 +181,12 @@ def main():
     st.divider()
 
     # --- PAGE CONTENT (double-buffered) ---
-    # Creating placeholder slots to avoid leftover UI elements and ghosting when switching pages with different layouts.
+    # Creating placeholder slots to avoid residual UI elements from previous pages when switching pages with different layouts.
     slot_a = st.empty()
     slot_b = st.empty()
 
     if st.session_state.get('_last_rendered_page') != curr:
-        # Flipping the active slot whenever the page changes so the next page
-        # renders into the other placeholder instead of reusing the same one.
+        # Alternation between slot_a and slot_b when loading new pages.
         st.session_state._active_slot = 1 - st.session_state.get('_active_slot', 0)
         st.session_state._last_rendered_page = curr
 

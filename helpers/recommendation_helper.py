@@ -54,8 +54,7 @@ def load_base_features():
     df['num_ingredients'] = df['num_ingredients'].fillna(df['num_ingredients'].median())
     df['num_steps'] = df['num_steps'].fillna(df['num_steps'].median())
     
-    # Turning taste labels into separate numeric flags lets KNN compare flavor
-    # directions like spicy, sweet, savory, and umami.
+    # Creates a boolean mask based on user prefrences.
     tastes = ["Spicy", "Sweet", "Savory", "Umami"]
     for t in tastes:
         df[f'is_{t.lower()}'] = (df['primary_taste'] == t).astype(int)
@@ -91,10 +90,8 @@ def load_base_features():
         min_val = df[f].min()
         if max_val > min_val:
             df[f] = (df[f] - min_val) / (max_val - min_val)
-            
-    # Applying TF-IDF lets ingredient words influence similarity without treating
-    # every ingredient as equally important. Limiting to 150 features keeps the
-    # model lighter and avoids overfitting to rare ingredient words.
+    # TF-IDF allows for more dynamic flavor and ingredient-based recommendations
+    # by identifiying patterns in the ingredient text.        
     tfidf = TfidfVectorizer(max_features=150, stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['ingredient_text'])
     
