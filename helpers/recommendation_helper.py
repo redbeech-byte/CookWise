@@ -14,7 +14,7 @@ def load_base_features():
     res = supabase.table("recipes").select("""
         recipe_id, recipe_title, est_prep_time_min, est_cook_time_min, 
         difficulty, is_vegan, is_vegetarian, is_gluten_free, is_dairy_free, is_nut_free, is_halal, is_kosher,
-        primary_taste, cook_speed, num_ingredients, num_steps, main_ingredient,
+        primary_taste, secondary_taste, cook_speed, num_ingredients, num_steps, main_ingredient,
         recipe_ingredients(ingredients(pure_ingredient_harsh))
     """).execute()
     
