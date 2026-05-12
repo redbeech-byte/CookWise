@@ -42,7 +42,8 @@ def load_base_features():
     df['ingredient_text'] = ingredient_texts
         
     # Mapping categorical difficulty values to numbers so KNN can compare them.
-    df['difficulty_num'] = df['difficulty'].map({'Easy': 1, 'Medium': 2, 'Hard': 3}).fillna(1)
+    # Database stores lowercase 'easy', 'medium', 'hard'.
+    df['difficulty_num'] = df['difficulty'].str.lower().map({'easy': 1, 'medium': 2, 'hard': 3}).fillna(1)
     # Total time combines preparation and cooking because both affect whether a
     # recipe feels quick or demanding to the user.
     df['total_time'] = df['est_prep_time_min'].fillna(0) + df['est_cook_time_min'].fillna(0)
@@ -54,20 +55,22 @@ def load_base_features():
     
     # Turning taste labels into separate numeric flags lets KNN compare flavor
     # directions like spicy, sweet, savory, and umami.
+    # Creates a boolean mask based on user prefrences.
     tastes = ["Spicy", "Sweet", "Savory", "Umami"]
     for t in tastes:
-        df[f'is_{t.lower()}'] = (df['primary_taste'] == t).astype(int)
+        # Checking both primary and secondary taste against the lowercase tag.
+        df[f'is_{t.lower()}'] = ((df['primary_taste'].str.lower() == t.lower()) | (df['secondary_taste'].str.lower() == t.lower())).astype(int)
 
     # Cook speed is also converted into flags because users may prefer quick or
     # slower recipes independently of total minutes.
-    df['is_fast'] = (df['cook_speed'] == 'Fast').astype(int)
-    df['is_slow'] = (df['cook_speed'] == 'Slow').astype(int)
+    df['is_fast'] = (df['cook_speed'].str.lower() == 'fast').astype(int)
+    df['is_slow'] = (df['cook_speed'].str.lower() == 'slow').astype(int)
 
     # Encoding main ingredients as boolean columns helps the model separate broad
     # recipe types like poultry, seafood, plant-based, or egg/dairy dishes.
     main_ings = ['poultry', 'red_meat', 'seafood', 'plant', 'egg_dairy']
     for ing in main_ings:
-        df[f'main_{ing}'] = (df['main_ingredient'] == ing).astype(int)
+        df[f'main_{ing}'] = (df['main_ingredient'].str.lower() == ing).astype(int)
 
     base_features = ['total_time', 'difficulty_num', 'num_ingredients', 'num_steps',
                 'is_vegan', 'is_vegetarian', 'is_gluten_free', 'is_dairy_free', 
@@ -91,6 +94,8 @@ def load_base_features():
     # Applying TF-IDF lets ingredient words influence similarity without treating
     # every ingredient as equally important. Limiting to 150 features keeps the
     # model lighter and avoids overfitting to rare ingredient words.
+    # TF-IDF allows for more dynamic flavor and ingredient-based recommendations
+    # by identifiying patterns in the ingredient text.        
     tfidf = TfidfVectorizer(max_features=150, stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['ingredient_text'])
     

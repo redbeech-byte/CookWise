@@ -15,7 +15,7 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
     
     # Applying basic filters first narrows the recipe set before text search is added.
     if difficulty and difficulty != "Any":
-        q = q.eq('difficulty', difficulty)
+        q = q.eq('difficulty', difficulty.lower())
         
     if max_time:
         q = q.lte('est_prep_time_min', max_time) # less then or equal to max_time
@@ -34,16 +34,19 @@ def search_recipes(query, limit=50, max_time=None, min_time=None, difficulty=Non
     # speed or difficulty, so each option maps to the matching recipe column.
     if cooking_prefs:
         for pref in cooking_prefs:
-            if pref in ["Spicy", "Sweet", "Savory", "Umami"]:
-                q = q.or_(f"primary_taste.eq.{pref},secondary_taste.eq.{pref}")
-            elif pref == "Fast":
-                q = q.eq("cook_speed", "Fast")
-            elif pref == "Slow":
-                q = q.eq("cook_speed", "Slow")
-            elif pref == "Easy":
-                q = q.eq("difficulty", "Easy")
-            elif pref == "Hard":
-                q = q.eq("difficulty", "Hard")
+            # Categorical values in the database are lowercase (e.g. 'spicy', 'fast'),
+            # but the UI provides capitalized strings.
+            p_lower = pref.lower()
+            if p_lower in ["spicy", "sweet", "savory", "umami"]:
+                q = q.or_(f"primary_taste.eq.{p_lower},secondary_taste.eq.{p_lower}")
+            elif p_lower == "fast":
+                q = q.eq("cook_speed", "fast")
+            elif p_lower == "slow":
+                q = q.eq("cook_speed", "slow")
+            elif p_lower == "easy":
+                q = q.eq("difficulty", "easy")
+            elif p_lower == "hard":
+                q = q.eq("difficulty", "hard")
 
     # Limiting the number of rows keeps the search response lightweight for the UI.
     q = q.limit(limit)
