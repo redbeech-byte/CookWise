@@ -1,5 +1,11 @@
-# While developing the application we ran into reaccuring setup issues when importing the app on different machines.
-# This batch file is a one-click solution to set up the environment and run the app on Windows.
+REM CookWise Windows startup script.
+Rem This file creates/reuses a local virtual environment,
+REM installs the Windows dependency file, checks for required secrets, and
+REM then starts the Streamlit app.
+Rem This allows for a one-click setup and launch of the app.
+REM
+REM Batch files use REM for comments. Using # here would make Windows try to
+REM execute the line as a command, so all documentation in this file uses REM.
 
 @echo off
 setlocal
@@ -7,10 +13,13 @@ setlocal
 echo Starting CookWise Setup for Windows...
 echo.
 
-REM Move into the folder where this batch file is located
+REM Running from the script folder makes relative paths predictable.
+REM Without this, double-clicking the file from another folder could make
+REM Python look for requirements and app files in the wrong place.
 cd /d "%~dp0"
 
-REM 1. Check whether Python is available
+REM Checking Python early gives the user a clear setup error before any
+REM virtual-environment or dependency commands are attempted.
 python --version >nul 2>&1
 if errorlevel 1 (
     echo Error: Python is not installed or not available in PATH.
@@ -19,7 +28,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM 2. Create a local virtual environment if it does not already exist
+REM Creating the virtual environment only when it is missing keeps later runs
+REM faster and preserves already-installed packages between launches.
 if not exist ".venv" (
     echo Creating local virtual environment...
     python -m venv .venv
@@ -30,7 +40,8 @@ if not exist ".venv" (
     )
 )
 
-REM 3. Activate the virtual environment
+REM Activating the environment makes the following python/pip commands use
+REM CookWise's local packages instead of the system-wide Python installation.
 call .venv\Scripts\activate
 if errorlevel 1 (
     echo Error: Failed to activate the virtual environment.
@@ -38,14 +49,17 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM 4. Upgrade pip inside the virtual environment
+REM Updating pip helps avoid installation issues caused by older package tools.
+REM A failed pip upgrade is treated as a warning because dependency installation
+REM may still work with the existing pip version.
 echo Upgrading pip...
 python -m pip install --upgrade pip
 if errorlevel 1 (
     echo Warning: pip upgrade failed. Continuing anyway...
 )
 
-REM 5. Install required packages
+REM CookWise keeps platform-specific dependency files because some packages can
+REM differ between Windows and macOS/Linux.
 if not exist "requirements_windows.txt" (
     echo Error: requirements_windows.txt was not found in this folder.
     pause
@@ -60,7 +74,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM 6. Check that Streamlit secrets exist
+REM Streamlit secrets are not committed to the repository, but the app needs
+REM them locally for API keys and Supabase credentials.
 if not exist ".streamlit\secrets.toml" (
     echo Error: .streamlit\secrets.toml was not found.
     echo The application needs this file for API keys and Supabase credentials.
@@ -68,7 +83,8 @@ if not exist ".streamlit\secrets.toml" (
     exit /b 1
 )
 
-REM 7. Launch the app using the Python interpreter from the venv
+REM Launching through python -m ensures Streamlit runs from the active virtual
+REM environment, even if another Streamlit installation exists globally.
 echo Launching CookWise...
 python -m streamlit run main_app.py
 

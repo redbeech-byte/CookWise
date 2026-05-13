@@ -7,6 +7,8 @@ from helpers.nutrition_helper import get_recipe_nutrition
 
 
 
+from views.profile import RESTRICTIONS, PREFERENCES
+
 def show():
     # Loading the user's profile from supabase lets the search page start with their saved
     # dietary restrictions and cooking preferences already applied
@@ -30,25 +32,26 @@ def show():
                 min_time, max_time = st.slider("Time Range (mins)", min_value=10, max_value=240, value=(10, 240), step=2)
                 difficulty = st.selectbox("Difficulty", ["Any", "Easy", "Medium", "Hard"])
                 
-                st.write("Dietary Preferences")
-                col1, col2 = st.columns(2)
-                # Building dietary_prefs from checked boxes makes the selected
-                # restrictions explicit before passing them into the database helper
-                # preselected boxes based on the user's saved profile preferences
+                st.write("---")
+                st.write("**Dietary Restrictions**")
                 dietary_prefs = []
-                with col1:
-                    if st.checkbox("Vegan", value="Vegan" in profile_dietary): dietary_prefs.append("Vegan")
-                    if st.checkbox("Vegetarian", value="Vegetarian" in profile_dietary): dietary_prefs.append("Vegetarian")
-                    if st.checkbox("Halal", value="Halal" in profile_dietary): dietary_prefs.append("Halal")
-                with col2:
-                    if st.checkbox("Gluten-Free", value="Gluten-Free" in profile_dietary): dietary_prefs.append("Gluten-Free")
-                    if st.checkbox("Dairy-Free", value="Dairy-Free" in profile_dietary): dietary_prefs.append("Dairy-Free")
-                    if st.checkbox("Nut-Free", value="Nut-Free" in profile_dietary): dietary_prefs.append("Nut-Free")
+                # Displaying restrictions in a grid to keep the popover compact.
+                d_cols = st.columns(2)
+                for idx, rest in enumerate(RESTRICTIONS):
+                    with d_cols[idx % 2]:
+                        if st.checkbox(rest, value=rest in profile_dietary, key=f"search_rest_{rest}"):
+                            dietary_prefs.append(rest)
                 
-                if profile_cooking:
-                    # Cooking preferences come from the profile automatically, so the
-                    # user understands why search results may already be filtered.
-                    st.info(f"Auto-applying cooking preferences: {', '.join(profile_cooking)}")
+                st.write("---")
+                st.write("**Cooking Preferences**")
+                cooking_prefs = []
+                # Displaying taste and style preferences as checkboxes,
+                # pre-selected based on the user's profile.
+                p_cols = st.columns(2)
+                for idx, pref in enumerate(PREFERENCES):
+                    with p_cols[idx % 2]:
+                        if st.checkbox(pref, value=pref in profile_cooking, key=f"search_pref_{pref}"):
+                            cooking_prefs.append(pref)
                     
         with st.spinner("Searching recipes..."):
             # Passing None for unchanged time boundaries keeps the database query
@@ -61,7 +64,7 @@ def show():
                 min_time=min_time if min_time > 10 else None,
                 difficulty=difficulty,
                 dietary_prefs=dietary_prefs,
-                cooking_prefs=profile_cooking
+                cooking_prefs=cooking_prefs
             )
     
     st.subheader(f"Results ({len(results)})")
